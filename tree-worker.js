@@ -446,7 +446,7 @@ function buildTreeWorker(state) {
       case 'hemispherical':  return 0.2 + 0.8 * Math.cos(Math.PI * r * 0.5);
       case 'cylindrical':    return 1;
       case 'tapered':        return 0.5 + 0.5 * (1 - r);
-      case 'flame':          return r <= 0.7 ? r / 0.7 : (1 - r) / 0.3;
+      case 'flame':          return r <= 0.7 ? 0.15 + 0.85 * r / 0.7 : 0.15 + 0.85 * (1 - r) / 0.3;
       case 'inverse':        return 0.2 + 0.8 * r;
       case 'tend-flame':     return r <= 0.7 ? 0.5 + 0.5 * r / 0.7 : 0.5 + 0.5 * (1 - r) / 0.3;
       default:               return 1;
@@ -624,6 +624,10 @@ function buildTreeWorker(state) {
   // Trunks — refCurve-based, matches main.js buildTree
   const trunkCount = Math.max(1, P.trunkCount | 0);
   const trunkSpread = P.trunkSplitSpread ?? 0.45;
+  const trunkSplitHeight = Math.max(0, Math.min(0.95, P.trunkSplitHeight ?? 0));
+  const useDelayedSplit = trunkCount > 1 && trunkSplitHeight > 0;
+  let tk0ForkNode = null;
+  let tk0NoisePhase = 0;
   const trunkSegLen = P.trunkHeight / P.trunkSteps;
   const lean = P.trunkLean ?? 0;
   const leanDirRad = ((P.trunkLeanDir ?? 0) * Math.PI) / 180;
@@ -633,10 +637,14 @@ function buildTreeWorker(state) {
   for (let tk = 0; tk < trunkCount; tk++) {
     const tpos = new THREE.Vector3();
     const tdir = new THREE.Vector3(0, 1, 0);
+    let tkAz = 0, tkOutward = 0;
     if (trunkCount > 1) {
       const az = (tk / trunkCount) * Math.PI * 2 + random() * 0.4;
-      tdir.set(Math.cos(az) * trunkSpread, 1, Math.sin(az) * trunkSpread).normalize();
-      tpos.set(Math.cos(az) * 0.25 * trunkSpread, 0, Math.sin(az) * 0.25 * trunkSpread);
+      tkAz = az; tkOutward = trunkSpread;
+      if (!useDelayedSplit) {
+        tdir.set(Math.cos(az) * trunkSpread, 1, Math.sin(az) * trunkSpread).normalize();
+        tpos.set(Math.cos(az) * 0.25 * trunkSpread, 0, Math.sin(az) * 0.25 * trunkSpread);
+      }
     }
     if (lean > 0) {
       const s = Math.sin(lean), c = Math.cos(lean);
@@ -646,11 +654,17 @@ function buildTreeWorker(state) {
     const trunkSteps = [];
     const trunkTwist = P.trunkTwist ?? 0;
     const tRng = _w_localRng((state.seed | 0), 0xA1A1, tk);
-    const trunkNoisePhase = tRng() * 1000;
+    let trunkNoisePhase;
+    if (useDelayedSplit) {
+      if (tk === 0) tk0NoisePhase = tRng() * 1000;
+      trunkNoisePhase = tk0NoisePhase;
+    } else {
+      trunkNoisePhase = tRng() * 1000;
+    }
     const startDirX = tdir.x, startDirY = tdir.y, startDirZ = tdir.z;
     const startPosX = tpos.x, startPosY = tpos.y, startPosZ = tpos.z;
     const jAmp = P.trunkJitter * 6.5;
-    const multiRestoreCap = trunkCount > 1 ? 0.4 : 0;
+    const multiRestoreCap = (trunkCount > 1 && !useDelayedSplit) ? 0.4 : 0;
 
     // Canonical reference trunk curve at fixed resolution — branch spawn
     // positions (below) come from here so trunkSteps only affects visible
@@ -672,6 +686,13 @@ function buildTreeWorker(state) {
         let dy = startDirY + nY;
         let dz = startDirZ + nZ;
         if (multiRestoreCap > 0) dy += Math.min(1, tN / 0.6) * multiRestoreCap;
+        if (useDelayedSplit && tN > trunkSplitHeight) {
+          const span = Math.max(0.05, 1 - trunkSplitHeight);
+          const f = Math.min(1, (tN - trunkSplitHeight) / span);
+          const smooth = f * f * (3 - 2 * f);
+          dx += Math.cos(tkAz) * tkOutward * smooth;
+          dz += Math.sin(tkAz) * tkOutward * smooth;
+        }
         if (bow > 0) {
           const bowIntegral = 1 - Math.cos(tN * Math.PI);
           const bowAmp = bow * 1.3;
@@ -694,8 +715,10 @@ function buildTreeWorker(state) {
 
     // Build user-resolution skeleton by sampling the reference curve.
     const lerpDir = new THREE.Vector3();
+    if (useDelayedSplit && tk > 0 && tk0ForkNode) tcur = tk0ForkNode;
     for (let i = 0; i < P.trunkSteps; i++) {
       const tN = (i + 0.5) / P.trunkSteps;
+      if (useDelayedSplit && tk > 0 && tN < trunkSplitHeight) continue;
       const refIdxF = tN * REF_TRUNK_STEPS - 0.5;
       const ri0 = Math.max(0, Math.floor(refIdxF));
       const ri1 = Math.min(REF_TRUNK_STEPS - 1, ri0 + 1);
@@ -713,6 +736,15 @@ function buildTreeWorker(state) {
       tpos.copy(nPos);
       tdir.copy(lerpDir);
       trunkSteps.push({ node: n, pos: n.pos, dir: lerpDir.clone() });
+    }
+    if (useDelayedSplit && tk === 0 && trunkSteps.length > 0) {
+      let bestIdx = 0, bestDiff = Infinity;
+      for (let s = 0; s < trunkSteps.length; s++) {
+        const stN = (s + 0.5) / P.trunkSteps;
+        const diff = Math.abs(stN - trunkSplitHeight);
+        if (diff < bestDiff) { bestDiff = diff; bestIdx = s; }
+      }
+      tk0ForkNode = trunkSteps[bestIdx].node;
     }
     {
       const apexLen = trunkSegLen * 1.2;

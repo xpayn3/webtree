@@ -24,6 +24,7 @@ import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r1';
 import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r1';
 import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r1';
+import { buildRootsGeometry } from './roots.js?v=r1';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -3186,6 +3187,19 @@ for (const p of WIND_SCHEMA) P.wind[p.key] = p.default;
 let profileEditor = null;
 let taperSpline = null;
 let lengthSpline = null;
+let rootsMesh = null;
+let _rootsMat = null;
+P.roots = {
+  enabled: true,
+  count: 6,
+  spread: 1.6,
+  length: 1.4,
+  depth: 0.6,
+  baseRadius: 0.18,
+  tipRadius: 0.04,
+  jitter: 0.4,
+  rise: 0.25,
+};
 P.physics = {};
 for (const p of PHYSICS_SCHEMA) P.physics[p.key] = p.default;
 // Live renderer + scene settings (exposed via the Settings section)
@@ -3789,11 +3803,19 @@ function buildTree(nodesOut) {
   for (let tk = 0; tk < trunkCount; tk++) {
     const tpos = new THREE.Vector3();
     const tdir = new THREE.Vector3(0, 1, 0);
+    let tkAz = 0, tkOutward = 0;
     if (trunkCount > 1) {
       const az = (tk / trunkCount) * Math.PI * 2 + random() * 0.4;
       const outward = trunkSpread;
-      tdir.set(Math.cos(az) * outward, 1, Math.sin(az) * outward).normalize();
-      tpos.set(Math.cos(az) * 0.25 * trunkSpread, 0, Math.sin(az) * 0.25 * trunkSpread);
+      tkAz = az; tkOutward = outward;
+      if (useDelayedSplit) {
+        // Y-fork: every trunk launches vertical from the shared root; the
+        // outward kick is applied later in the ref-curve loop above
+        // trunkSplitHeight.
+      } else {
+        tdir.set(Math.cos(az) * outward, 1, Math.sin(az) * outward).normalize();
+        tpos.set(Math.cos(az) * 0.25 * trunkSpread, 0, Math.sin(az) * 0.25 * trunkSpread);
+      }
     }
     if (lean > 0) {
       // Tilt the initial heading by `lean` radians in the lean direction.
@@ -3807,12 +3829,20 @@ function buildTree(nodesOut) {
     // downstream random stream.
     const tRng = _localRng(P.seed | 0, 0xA1A1, tk);
     // Noise phase for this trunk — picks the curve shape from the seed.
-    const trunkNoisePhase = tRng() * 1000;
+    // In Y-fork mode all trunks share tk=0's phase so the lower bole paths
+    // coincide exactly until the split height.
+    let trunkNoisePhase;
+    if (useDelayedSplit) {
+      if (tk === 0) tk0NoisePhase = tRng() * 1000;
+      trunkNoisePhase = tk0NoisePhase;
+    } else {
+      trunkNoisePhase = tRng() * 1000;
+    }
     // Capture starting direction before the loop (tdir is rebuilt per step).
     const startDirX = tdir.x, startDirY = tdir.y, startDirZ = tdir.z;
     const startPosX = tpos.x, startPosY = tpos.y, startPosZ = tpos.z;
     const jAmp = P.trunkJitter * 6.5;
-    const multiRestoreCap = trunkCount > 1 ? 0.4 : 0;
+    const multiRestoreCap = (trunkCount > 1 && !useDelayedSplit) ? 0.4 : 0;
 
     // === Build a CANONICAL reference trunk curve at fixed resolution ===
     // All branch spawn positions along this trunk come from the reference
@@ -3836,6 +3866,14 @@ function buildTree(nodesOut) {
         let dy = startDirY + nY;
         let dz = startDirZ + nZ;
         if (multiRestoreCap > 0) dy += Math.min(1, tN / 0.6) * multiRestoreCap;
+        if (useDelayedSplit && tN > trunkSplitHeight) {
+          // Smooth ramp from 0 at the fork up to full trunkSpread by tN=1.
+          const span = Math.max(0.05, 1 - trunkSplitHeight);
+          const f = Math.min(1, (tN - trunkSplitHeight) / span);
+          const smooth = f * f * (3 - 2 * f);
+          dx += Math.cos(tkAz) * tkOutward * smooth;
+          dz += Math.sin(tkAz) * tkOutward * smooth;
+        }
         if (bow > 0) {
           const bowIntegral = 1 - Math.cos(tN * Math.PI);
           const bowAmp = bow * 1.3;
@@ -3863,8 +3901,12 @@ function buildTree(nodesOut) {
     // the reference curve directly for exactness, using the nearest
     // skeleton node as parent for attachment.
     const lerpDir = new THREE.Vector3();
+    // For tk>=1 in Y-fork mode, attach the first emitted node to tk=0's fork
+    // node instead of the global root. The lower-bole nodes are skipped.
+    if (useDelayedSplit && tk > 0 && tk0ForkNode) tcur = tk0ForkNode;
     for (let i = 0; i < P.trunkSteps; i++) {
       const tN = (i + 0.5) / P.trunkSteps;
+      if (useDelayedSplit && tk > 0 && tN < trunkSplitHeight) continue;
       const refIdxF = tN * REF_TRUNK_STEPS - 0.5;
       const ri0 = Math.max(0, Math.floor(refIdxF));
       const ri1 = Math.min(REF_TRUNK_STEPS - 1, ri0 + 1);
@@ -3882,6 +3924,16 @@ function buildTree(nodesOut) {
       tpos.copy(nPos);
       tdir.copy(lerpDir);
       trunkSteps.push({ node: n, pos: n.pos, dir: lerpDir.clone() });
+    }
+    // Capture tk=0's fork node so subsequent trunks can attach there.
+    if (useDelayedSplit && tk === 0 && trunkSteps.length > 0) {
+      let bestIdx = 0, bestDiff = Infinity;
+      for (let s = 0; s < trunkSteps.length; s++) {
+        const stN = (s + 0.5) / P.trunkSteps;
+        const diff = Math.abs(stN - trunkSplitHeight);
+        if (diff < bestDiff) { bestDiff = diff; bestIdx = s; }
+      }
+      tk0ForkNode = trunkSteps[bestIdx].node;
     }
     {
       const apexLen = trunkSegLen * 1.2;
@@ -6637,8 +6689,10 @@ async function generateTree(opts = {}) {
     if (vineLeafInst)   _orphanBark.push(vineLeafInst);
     if (stubInst)       _orphanBark.push(stubInst);
     if (fruitInst)      _orphanBark.push(fruitInst);
+    if (rootsMesh)      _orphanBark.push(rootsMesh);
     treeMesh = null; treeWireMesh = null; treeSplineMesh = null; treeSplineDots = null;
     vineMesh = null; vineLeafInst = null; stubInst = null; fruitInst = null;
+    rootsMesh = null;
   }
   if (leafInstA) _orphanFoliage.push(leafInstA);
   if (leafInstB) _orphanFoliage.push(leafInstB);
@@ -6871,6 +6925,39 @@ async function generateTree(opts = {}) {
   treeMesh.visible = !splineViewOn;
   scene.add(treeMesh);
   _gtMark('barkmesh');
+
+  if (P.roots && P.roots.enabled && P.roots.count > 0) {
+    const trunkBaseR = (P.baseRadius ?? 0.35) * ((P.trunkHeight ?? 10) / 10);
+    const rootsGeo = buildRootsGeometry({
+      count: P.roots.count | 0,
+      spread: P.roots.spread,
+      length: P.roots.length,
+      depth: P.roots.depth,
+      baseRadius: P.roots.baseRadius * trunkBaseR / 0.35,
+      tipRadius: P.roots.tipRadius * trunkBaseR / 0.35,
+      jitter: P.roots.jitter,
+      rise: P.roots.rise,
+      seed: ((P.seed | 0) ^ 0x12345) >>> 0,
+    });
+    if (rootsGeo) {
+      // Use a vanilla MeshStandardMaterial — barkMat relies on per-vertex
+      // node weights / barkRadialRest attributes the trunk builder emits,
+      // which our tube geometry doesn't carry.
+      if (!_rootsMat) {
+        _rootsMat = new THREE.MeshStandardMaterial({
+          map: barkAlbedo, normalMap: barkNormal,
+          roughness: 0.95, metalness: 0,
+        });
+      }
+      rootsMesh = new THREE.Mesh(rootsGeo, _rootsMat);
+      rootsMesh.castShadow = true;
+      rootsMesh.receiveShadow = true;
+      rootsMesh.frustumCulled = false;
+      rootsMesh.visible = !splineViewOn;
+      rootsMesh.name = 'rootsMesh';
+      scene.add(rootsMesh);
+    }
+  }
 
   if (!isScrubbing) {
     buildVines(chains);
@@ -7968,6 +8055,46 @@ function speciesIconName(k) {
   // tree rebuild / skeleton / foliage and just re-extrudes the bark.
   profileEditor.onChange = () => debouncedGenerate({ tubesOnly: true });
   details.appendChild(wrap);
+  sidebarBody.appendChild(details);
+}
+
+// Roots — surface tendrils flaring from the trunk base.
+{
+  const details = document.createElement('details');
+  details.open = false;
+  details.dataset.treeType = 'broadleaf,conifer,bush';
+  const summary = document.createElement('summary');
+  setSummary(summary, 'git-branch', 'Roots');
+  details.appendChild(summary);
+
+  const toggleRow = document.createElement('div');
+  toggleRow.className = 'slider-row toggle-row';
+  const tLabel = document.createElement('label');
+  tLabel.textContent = 'Enabled';
+  const tInput = document.createElement('input');
+  tInput.type = 'checkbox';
+  tInput.checked = P.roots.enabled;
+  tInput.addEventListener('change', () => {
+    P.roots.enabled = tInput.checked;
+    debouncedGenerate();
+  });
+  toggleRow.append(tLabel, tInput);
+  details.appendChild(toggleRow);
+
+  const ROOTS_SCHEMA = [
+    { key: 'count',      label: 'Count',       min: 0,  max: 16,  step: 1,    default: 6 },
+    { key: 'spread',     label: 'Spread',      min: 0.2,max: 5,   step: 0.05, default: 1.6 },
+    { key: 'length',     label: 'Length',      min: 0.3,max: 3,   step: 0.05, default: 1.4 },
+    { key: 'depth',      label: 'Depth',       min: 0,  max: 2,   step: 0.05, default: 0.6 },
+    { key: 'baseRadius', label: 'Base radius', min: 0.02,max:0.6, step: 0.01, default: 0.18 },
+    { key: 'tipRadius',  label: 'Tip radius',  min: 0.005,max:0.3,step: 0.005,default: 0.04 },
+    { key: 'rise',       label: 'Arch rise',   min: 0,  max: 1,   step: 0.02, default: 0.25 },
+    { key: 'jitter',     label: 'Jitter',      min: 0,  max: 1,   step: 0.02, default: 0.4 },
+  ];
+  for (const p of ROOTS_SCHEMA) {
+    const row = createSliderRow(p, () => P.roots[p.key], (v) => { P.roots[p.key] = v; }, () => debouncedGenerate());
+    details.appendChild(row);
+  }
   sidebarBody.appendChild(details);
 }
 
@@ -13017,10 +13144,10 @@ applyLeafMaterial();
 applyTreeTypeVisibility();
 
 // --- Sidebar section rail (floating quick-nav pill) ----------------------
-// Mirrors the visible <details> sections in #sidebar-body as a vertical row
-// of notches pinned to the right edge of the canvas. Click = scroll the
-// sidebar to that section (and open it if collapsed). Hover reveals a
-// floating label to the left of the notch.
+// Mirrors the visible top-level SECTIONS (`.section-label` dividers added
+// via addSectionLabel — Shape / Foliage / Bark / Scene / etc.) as a column
+// of icon buttons pinned to the right of the canvas. Click = scroll the
+// sidebar to that section. Hover = floating label to the left of the icon.
 let rebuildSectionRail = () => {};
 (function initSectionRail() {
   const canvasWrap = document.getElementById('canvas-wrap');
@@ -13038,32 +13165,28 @@ let rebuildSectionRail = () => {};
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
       inner.textContent = '';
-      for (const d of sbBody.children) {
-        if (d.tagName !== 'DETAILS') continue;
-        if (d.style.display === 'none') continue;
-        const label = d.querySelector(':scope > summary .sec-label')?.textContent?.trim();
-        if (!label) continue;
+      for (const el of sbBody.querySelectorAll(':scope > .section-label')) {
+        if (el.style.display === 'none') continue;
+        const txt = el.querySelector(':scope > span')?.textContent?.trim();
+        if (!txt) continue;
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'section-notch';
-        btn.setAttribute('aria-label', label);
-        const tip = document.createElement('span');
-        tip.className = 'section-notch-tip';
-        const srcIcon = d.querySelector(':scope > summary .sec-icon');
+        btn.setAttribute('aria-label', txt);
+        // Clone the section-label's existing icon so the rail visually
+        // matches whatever art the section ships with.
+        const srcIcon = el.querySelector(':scope > .sec-icon');
         if (srcIcon) {
           const ic = srcIcon.cloneNode(true);
-          ic.classList.add('section-notch-tip-icon');
-          tip.appendChild(ic);
+          ic.classList.add('section-notch-icon');
+          btn.appendChild(ic);
         }
-        const txt = document.createElement('span');
-        txt.textContent = label;
-        tip.appendChild(txt);
+        const tip = document.createElement('span');
+        tip.className = 'section-notch-tip';
+        tip.textContent = txt;
         btn.appendChild(tip);
         btn.addEventListener('click', () => {
-          if (!d.open) d.open = true;
-          // block: 'start' pins the summary to the top of the scrollable
-          // sidebar-body container — no extra math needed.
-          d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
         inner.appendChild(btn);
       }
