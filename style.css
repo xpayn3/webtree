@@ -112,13 +112,13 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: #000;
+  background: #050505;
   color: var(--text);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
+  gap: 18px;
   font-family: var(--font-ui);
   opacity: 1;
   transform: scale(1);
@@ -126,95 +126,121 @@
   pointer-events: auto;
   will-change: opacity, transform;
 }
-#splash.hide { opacity: 0; transform: scale(1.06); pointer-events: none; }
+#splash::before {
+  /* Soft radial vignette — adds depth without colour. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.015) 35%,
+    transparent 65%);
+  pointer-events: none;
+}
+#splash.hide { opacity: 0; transform: scale(1.04); pointer-events: none; }
+#splash.hide .splash-ring,
+#splash.hide .splash-dot,
 #splash.hide .splash-progress::before { animation: none; }
-#splash .splash-logo {
-  width: 84px;
-  height: 105px;
-  overflow: visible;
-  /* Promote to its own compositor layer so sway stays smooth while the main
-     thread is blocked by WebGPU init / shader compile. */
+
+#splash .splash-mark {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  /* Compositor layer so the spin stays smooth while the main thread is
+     blocked by WebGPU init / shader compile. */
   will-change: transform;
   transform: translateZ(0);
 }
-#splash .sl-tree {
-  transform-origin: 32px 72px;
-  animation: sl-sway 2.8s ease-in-out infinite;
+#splash .splash-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  animation: sl-spin 1.15s cubic-bezier(0.5, 0, 0.5, 1) infinite;
   will-change: transform;
 }
-#splash .sl-trunk,
-#splash .sl-branch {
-  stroke: var(--text);
-  stroke-width: 2;
-  stroke-linecap: round;
+#splash .ring-track {
   fill: none;
-  stroke-dasharray: 60;
-  stroke-dashoffset: 60;
-  animation: sl-draw 0.9s ease forwards;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 1.4;
 }
-#splash .sl-trunk   { animation-delay: 0.00s; }
-#splash .sl-b1      { animation-delay: 0.35s; }
-#splash .sl-b2      { animation-delay: 0.50s; }
-#splash .sl-b3      { animation-delay: 0.65s; }
-#splash .sl-leaf {
-  fill: var(--text);
-  opacity: 0;
-  transform-origin: center;
-  animation: sl-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+#splash .ring-arc {
+  fill: none;
+  stroke: rgba(237, 237, 237, 0.95);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  /* circumference = 2π·17 ≈ 106.8; 80/26.8 → ~270° arc, 90° gap */
+  stroke-dasharray: 80 26.8;
 }
-#splash .sl-l1 { animation-delay: 0.90s; }
-#splash .sl-l2 { animation-delay: 1.05s; }
-#splash .sl-l3 { animation-delay: 1.20s; }
-#splash .sl-l4 { animation-delay: 1.35s; }
+#splash .splash-dot {
+  position: relative;
+  width: 4px;
+  height: 4px;
+  background: rgba(237, 237, 237, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(237, 237, 237, 0.45);
+  animation: sl-pulse 1.6s ease-in-out infinite;
+}
 #splash .splash-title {
-  font-size: 11px;
-  letter-spacing: 0.42em;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.5em;
   text-transform: uppercase;
+  /* compensate for trailing letter-spacing so the block reads visually centred */
+  margin-left: 0.5em;
   opacity: 0;
-  animation: sl-fade 0.7s ease 1.1s forwards;
+  animation: sl-fade 0.7s ease 0.35s forwards;
+}
+#splash .splash-meta {
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-left: 0.2em;
+  color: rgba(255, 255, 255, 0.34);
+  opacity: 0;
+  animation: sl-fade-meta 0.7s ease 0.6s forwards;
 }
 #splash .splash-progress {
-  width: 140px;
-  height: 2px;
+  width: 168px;
+  height: 1px;
   margin-top: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 1px;
-  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
   position: relative;
+  overflow: hidden;
   opacity: 0;
-  animation: sl-fade-full 0.5s ease 1.3s forwards;
+  animation: sl-fade-full 0.5s ease 0.8s forwards;
 }
 #splash .splash-progress::before {
   content: "";
   position: absolute;
   top: 0;
   left: 0;
-  width: 30%;
+  width: 38%;
   height: 100%;
   background: linear-gradient(90deg,
     transparent 0%,
-    rgba(237, 237, 237, 0.15) 25%,
-    rgba(237, 237, 237, 0.9) 50%,
-    rgba(237, 237, 237, 0.15) 75%,
+    rgba(237, 237, 237, 0.1) 18%,
+    rgba(237, 237, 237, 0.85) 50%,
+    rgba(237, 237, 237, 0.1) 82%,
     transparent 100%);
-  animation: sl-shimmer 1.6s linear infinite;
+  animation: sl-bar 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
   will-change: transform;
 }
-@keyframes sl-draw { to { stroke-dashoffset: 0; } }
-@keyframes sl-pop  {
-  0%   { opacity: 0; transform: scale(0.6); }
-  70%  { opacity: 1; transform: scale(1.15); }
-  100% { opacity: 1; transform: scale(1); }
+@keyframes sl-spin { to { transform: rotate(360deg); } }
+@keyframes sl-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.35); }
 }
-@keyframes sl-fade { to { opacity: 0.75; } }
+@keyframes sl-fade      { to { opacity: 0.92; } }
+@keyframes sl-fade-meta { to { opacity: 0.55; } }
 @keyframes sl-fade-full { to { opacity: 1; } }
-@keyframes sl-shimmer {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(333.4%); }
-}
-@keyframes sl-sway {
-  0%, 100% { transform: rotate(-2.2deg); }
-  50%      { transform: rotate(2.2deg); }
+@keyframes sl-bar {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(370%); }
 }
 
 /* Scene fade-in: while splash is present and not dismissing, canvas is
@@ -1619,20 +1645,43 @@ body.light-mode .scrub-tip {
 #stats .k { color: rgba(255, 255, 255, 0.45); }
 #stats .v { color: var(--text); font-variant-numeric: tabular-nums; }
 
-/* ---------- tree size info: map-style scale ruler + person silhouette ---- */
-/* Bottom-left inside the canvas. Pure visual — no chrome, like a map legend. */
-#tree-info {
+/* ---------- tree size info: retired (replaced by #axis-gizmo) ---------- */
+#tree-info { display: none; }
+
+/* ---------- 3D axis gizmo (bottom-left) ---------- */
+/* Compact XYZ orientation indicator. SVG inside is updated each frame
+   from the camera quaternion — see updateAxisGizmo() in main.js. */
+#axis-gizmo {
   position: absolute;
-  left: 18px;
-  bottom: 16px;
+  left: 14px;
+  bottom: 14px;
   z-index: 6;
+  width: 64px;
+  height: 64px;
+  /* The container itself is transparent — only the per-axis hit circles
+     intercept clicks (defined inline in the SVG). */
   pointer-events: none;
   user-select: none;
-  display: flex;
-  align-items: flex-end;
-  gap: 14px;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5));
 }
+#axis-gizmo svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+/* Per-axis groups: the invisible hit ring inside `.ag-axis` keeps
+   pointer-events; everything else stays purely visual.
+   `pointer-events: all` is critical — SVG's default visiblePainted excludes
+   transparent fills, which would silently swallow clicks on the hit ring. */
+#axis-gizmo .ag-hit { pointer-events: all; cursor: pointer; }
+body.embed-clean #axis-gizmo,
+body.sculpt-mode #axis-gizmo,
+body.bake-mode #axis-gizmo {
+  display: none;
+}
+
+/* Legacy classes — kept defined so any leftover treeInfo populate would
+   still render correctly if re-enabled. Otherwise unused. */
 #tree-info .ti-ruler {
   display: flex;
   flex-direction: column;
@@ -1742,22 +1791,34 @@ body.light-mode .scrub-tip {
   background: var(--surface-card);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-hi);
   border-radius: var(--r-lg);
-  margin: 8px 10px;
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
+  margin: 14px 10px;
+  /* clip-path replaces overflow:hidden — keeps the rounded clip but
+     doesn't make the card a scroll container. Sticky summaries need their
+     scroll ancestor to be #sidebar-body, not the card itself. */
+  clip-path: inset(0 round var(--r-lg));
+  /* Two-layer shadow — a tight ambient + a longer drop — so the card
+     visibly lifts off the sidebar surface and the gap between cards
+     reads even at a glance while scrolling. */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 6px 18px rgba(0, 0, 0, 0.22);
   transition: border-color var(--dur-med), background var(--dur-med), box-shadow var(--dur-med);
   position: relative;
 }
 #sidebar-body > details + details,
 #sidebar-body > .species-card + details,
-#sidebar-body > details + .species-card { margin-top: 8px; }
+#sidebar-body > details + .species-card { margin-top: 14px; }
 #sidebar-body > details[open] {
-  border-color: var(--border-hi);
+  border-color: var(--accent-soft, var(--border-hi));
   background: var(--surface-card-hi);
   padding-bottom: 6px;
-  box-shadow: var(--shadow-card), 0 4px 18px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 2px 4px rgba(0, 0, 0, 0.22),
+    0 10px 28px rgba(0, 0, 0, 0.32);
 }
 /* Override the species-card's own padding so it shares the unified inset. */
 #sidebar .species-card { padding: 10px 12px; }
@@ -2034,6 +2095,31 @@ body.light-mode .scrub-tip {
   transition: color var(--dur), background var(--dur-fast);
   border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
+/* Sticky summaries — when you scroll past an open card, its title pins to
+   the top of the sidebar so you always know which card you're inside.
+   The card's clip-path bounds the sticky range to the card's own height,
+   so the next summary takes over once you scroll past. */
+#sidebar-body > details > summary,
+#sidebar #levels-wrapper > details > summary {
+  position: sticky;
+  /* Pin directly below the live tabs + tree-type-sticky stack. The height
+     is measured at runtime and written to --sb-sticky-h on #sidebar-body
+     so this stays correct when the search expands, tabs hide, etc. */
+  top: var(--sb-sticky-h, 86px);
+  z-index: 4;
+  /* Opaque-ish surface so card content scrolling underneath doesn't bleed
+     through the title. backdrop-filter blurs whatever does show through. */
+  background: var(--surface-card);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+}
+#sidebar-body > details[open] > summary,
+#sidebar #levels-wrapper > details[open] > summary {
+  background: var(--surface-card-hi);
+  /* Subtle bottom rule appears once the summary actually sticks — gives the
+     cards-app feel of a hairline under the pinned header. */
+  box-shadow: 0 1px 0 var(--border);
+}
 #sidebar summary:hover {
   color: #fff;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent);
@@ -2116,25 +2202,38 @@ body.light-mode .scrub-tip {
   border-radius: 0;
   overflow: visible;
 }
+/* Level cards inherit the same surface/margin/shadow as the general
+   sidebar cards so closed-level height matches and the gaps between
+   levels feel like the gaps between any other cards. */
 #sidebar #levels-wrapper > details {
   background: var(--surface-card);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-hi);
   border-radius: var(--r-lg);
-  margin: 5px 8px;
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
-  transition: border-color var(--dur-med), background var(--dur-med);
+  margin: 14px 10px;
+  /* clip-path replaces overflow:hidden — same rounded clip but doesn't
+     turn this element into a scroll container, which is what was breaking
+     position:sticky on the summary. */
+  clip-path: inset(0 round var(--r-lg));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 6px 18px rgba(0, 0, 0, 0.22);
+  transition: border-color var(--dur-med), background var(--dur-med), box-shadow var(--dur-med);
 }
-#sidebar #levels-wrapper > details + details { margin-top: 6px; }
+#sidebar #levels-wrapper > details + details { margin-top: 14px; }
 #sidebar #levels-wrapper > details[open] {
-  border-color: var(--border-hi);
+  border-color: var(--accent-soft, var(--border-hi));
   background: var(--surface-card-hi);
-  padding-bottom: 5px;
+  padding-bottom: 6px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 2px 4px rgba(0, 0, 0, 0.22),
+    0 10px 28px rgba(0, 0, 0, 0.32);
 }
 #sidebar #levels-wrapper summary {
-  padding: 10px 30px 10px 14px;
+  padding: 11px 30px 11px 16px;
   font-size: 12px;
   letter-spacing: 0.005em;
   font-weight: 500;
@@ -4477,6 +4576,50 @@ body.bake-mode   #section-rail {
 .section-notch.active {
   color: var(--accent-bright, #80b3ff);
 }
+/* Numbered sub-notches under the Branching icon — one per Level card. */
+.section-notch-sub {
+  width: 20px;
+  height: 18px;
+  font: 600 9.5px / 1 var(--font-ui, system-ui);
+  font-feature-settings: "tnum" 1;
+  color: rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  position: relative;
+}
+.section-notch-sub::before {
+  /* Thin connector tying the level numbers to the branching icon above */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 1px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.section-notch-sub:first-of-type::before { display: none; }
+.section-notch-sub .section-notch-num {
+  display: inline-block;
+  letter-spacing: 0;
+}
+.section-notch-sub:hover,
+.section-notch-sub:focus-visible {
+  color: rgba(255, 255, 255, 1);
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.1);
+}
+body.light-mode .section-notch-sub {
+  color: rgba(0, 0, 0, 0.5);
+}
+body.light-mode .section-notch-sub::before {
+  background: rgba(0, 0, 0, 0.15);
+}
+body.light-mode .section-notch-sub:hover,
+body.light-mode .section-notch-sub:focus-visible {
+  color: rgba(0, 0, 0, 0.95);
+  background: rgba(0, 0, 0, 0.06);
+}
 .section-notch-icon {
   display: inline-flex;
   align-items: center;
@@ -4484,10 +4627,14 @@ body.bake-mode   #section-rail {
   width: 16px;
   height: 16px;
   pointer-events: none;
+  color: inherit;
 }
 .section-notch-icon svg {
+  display: block;
   width: 16px;
   height: 16px;
+  stroke: currentColor;
+  fill: none;
 }
 .section-notch-tip {
   position: absolute;
@@ -5320,20 +5467,22 @@ body.leaf-creator-mode .scrub-tip { display: none !important; }
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   /* Infinite decorative loops — off */
-  #splash .sl-tree,
+  #splash .splash-ring,
+  #splash .splash-dot,
   #splash .splash-progress::before,
   .sc-bar-dot,
   .lc-bar-dot {
     animation: none !important;
   }
+  /* Static fallback: show the ring as a complete thin circle, no spinner. */
+  #splash .ring-arc { stroke-dasharray: none !important; opacity: 0.5; }
   /* Progress track stays visible as a subtle "waiting" indicator */
   #splash .splash-progress { opacity: 0.5 !important; }
 
   /* Springy overshoot curves flattened to linear ease-out */
   .section-notch,
   .section-notch::before,
-  #help-btn,
-  #splash .sl-leaf {
+  #help-btn {
     transition-timing-function: ease-out !important;
     animation-timing-function: ease-out !important;
   }

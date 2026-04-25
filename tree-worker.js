@@ -675,13 +675,19 @@ function buildTreeWorker(state) {
       const refSegLen = P.trunkHeight / REF_TRUNK_STEPS;
       const refPos = new THREE.Vector3(startPosX, startPosY, startPosZ);
       const refDir = new THREE.Vector3(startDirX, startDirY, startDirZ);
+      const sinAmt  = (P.trunkSinuous ?? 0);
+      const sinFreq = (P.trunkSinuousFreq ?? 1.0);
       for (let i = 0; i < REF_TRUNK_STEPS; i++) {
         const tN = (i + 0.5) / REF_TRUNK_STEPS;
-        const nX = _smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
-                 + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3;
-        const nZ = _smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
-                 + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3;
+        let nX = _smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
+               + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3;
+        let nZ = _smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
+               + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3;
         const nY = _smoothNoise1D(trunkNoisePhase + tN * 2.4 + 51.7) * 0.12;
+        if (sinAmt > 0) {
+          nX += _smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq) * sinAmt;
+          nZ += _smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq + 73.1) * sinAmt;
+        }
         let dx = startDirX + nX;
         let dy = startDirY + nY;
         let dz = startDirZ + nZ;
@@ -1239,11 +1245,15 @@ function buildTube(chainNodes, profile, taper, isScrubbing, displace, isBranch, 
   // step the Frenet frames flip on tight curves; below 8 radial sides the
   // trunk reads as a faceted polygon.
   const tubularPerStep = Math.max(4, Math.min(10, (displace && displace.tubularDensity) || 6));
-  const fullTub = Math.min(384, Math.max(12, (pts.length - 1) * tubularPerStep));
+  const fullTub = Math.min(768, Math.max(12, (pts.length - 1) * tubularPerStep));
   const baseRad = Math.max(8, Math.min(24, (displace && displace.radialSegs) || 16));
   const fullRad = r0 > 0.3 ? baseRad : Math.max(4, baseRad >> 1);
-  const tubular = isScrubbing ? Math.max(4, Math.floor(fullTub * 0.28)) : fullTub;
-  const radial  = isScrubbing ? Math.max(4, Math.floor(fullRad * 0.5))  : fullRad;
+  // Trunk chains skip the scrub downsize — the user dragging mesh-detail
+  // sliders needs to see the actual result, not a quartered preview. Mirror
+  // of main.js. `isBranch` is passed in from the caller; `!isBranch` = trunk.
+  const _isTrunk = !isBranch;
+  const tubular = (isScrubbing && !_isTrunk) ? Math.max(4, Math.floor(fullTub * 0.28)) : fullTub;
+  const radial  = (isScrubbing && !_isTrunk) ? Math.max(4, Math.floor(fullRad * 0.5))  : fullRad;
 
   // Allocate ring-frame SoA + write rings + parallel-transport frames.
   const tub1 = tubular + 1;

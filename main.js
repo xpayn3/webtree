@@ -783,7 +783,12 @@ function _sculptBakePose() {
     }
   }
   if (barkRadialRest && barkNodeA) {
-    for (let v = 0; v < barkNodeA.length; v++) {
+    // Bound by the geometry's actual vert count, not the pool array's length
+    // — pools are grow-only and stay bigger than the live mesh after a shrink.
+    const vCount = treeMesh && treeMesh.geometry?.attributes?.position
+      ? treeMesh.geometry.attributes.position.count
+      : barkNodeA.length;
+    for (let v = 0; v < vCount; v++) {
       const a = barkNodeA[v], b = barkNodeB[v], w = barkNodeW[v], iw = 1 - w;
       const cx = skRestX[a] * iw + skRestX[b] * w;
       const cy = skRestY[a] * iw + skRestY[b] * w;
@@ -1508,7 +1513,8 @@ async function buildTreeAndTubesViaWorker(profilePoints, taperPoints, isScrubbin
     lengthPoints: (lengthSpline && lengthSpline.points) ? lengthSpline.points.slice() : null,
     P: {
       trunkHeight: P.trunkHeight, trunkSteps: P.trunkSteps, trunkJitter: P.trunkJitter,
-      trunkCount: P.trunkCount, trunkSplitSpread: P.trunkSplitSpread, trunkTwist: P.trunkTwist,
+      trunkCount: P.trunkCount, trunkSplitSpread: P.trunkSplitSpread, trunkSplitHeight: P.trunkSplitHeight, trunkTwist: P.trunkTwist,
+      trunkSinuous: P.trunkSinuous, trunkSinuousFreq: P.trunkSinuousFreq,
       trunkLean: P.trunkLean, trunkLeanDir: P.trunkLeanDir, trunkBow: P.trunkBow,
       trunkScale: P.trunkScale, rootFlare: P.rootFlare,
       tipRadius: P.tipRadius, baseRadius: P.baseRadius, taperExp: P.taperExp,
@@ -1980,6 +1986,45 @@ function makeGridTexture(size, cells, baseColor, minorColor, majorColor) {
     const p = i * step;
     ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
+  }
+  // Scale label inside one 1 m × 1 m major cell. Picked off-centre so the
+  // tiled copies never land on the tree base. Color is derived from the
+  // floor luminance so it reads on both light and dark themes.
+  {
+    const major = step * 4;          // px per 1 m square
+    // Corner-ish placement — col/row are major-cell indices; tile is 40 wide.
+    const labelCol = 5;
+    const labelRow = 5;
+    const lx = labelCol * major;
+    const ly = labelRow * major;
+    // Luminance-aware label color: light text on dark floor, dark on light.
+    const _bh = (baseColor || '#000').replace('#', '');
+    const _hh = _bh.length === 3 ? _bh.split('').map((c) => c + c).join('') : _bh;
+    const _br = parseInt(_hh.slice(0, 2), 16) || 0;
+    const _bg = parseInt(_hh.slice(2, 4), 16) || 0;
+    const _bb = parseInt(_hh.slice(4, 6), 16) || 0;
+    const _lum = (0.2126 * _br + 0.7152 * _bg + 0.0722 * _bb) / 255;
+    const labelColor = _lum < 0.5 ? '#a8a8b0' : '#2a2a30';
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = labelColor;
+    ctx.lineWidth = 1.4;
+    // Dimension bracket spanning the full 1 m square width.
+    const yLine = ly + major * 0.66;
+    ctx.beginPath();
+    ctx.moveTo(lx + major * 0.16, yLine);
+    ctx.lineTo(lx + major * 0.84, yLine);
+    ctx.moveTo(lx + major * 0.16, yLine - major * 0.07);
+    ctx.lineTo(lx + major * 0.16, yLine + major * 0.07);
+    ctx.moveTo(lx + major * 0.84, yLine - major * 0.07);
+    ctx.lineTo(lx + major * 0.84, yLine + major * 0.07);
+    ctx.stroke();
+    ctx.fillStyle = labelColor;
+    ctx.font = `600 ${Math.round(major * 0.34)}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('1 m', lx + major * 0.5, ly + major * 0.38);
+    ctx.restore();
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
@@ -3858,13 +3903,22 @@ function buildTree(nodesOut) {
       const refSegLen = P.trunkHeight / REF_TRUNK_STEPS;
       const refPos = new THREE.Vector3(startPosX, startPosY, startPosZ);
       const refDir = new THREE.Vector3(startDirX, startDirY, startDirZ);
+      const sinAmt  = (P.trunkSinuous ?? 0);
+      const sinFreq = (P.trunkSinuousFreq ?? 1.0);
       for (let i = 0; i < REF_TRUNK_STEPS; i++) {
         const tN = (i + 0.5) / REF_TRUNK_STEPS;
-        const nX = smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
-                 + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3;
-        const nZ = smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
-                 + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3;
+        let nX = smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
+               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3;
+        let nZ = smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
+               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3;
         const nY = smoothNoise1D(trunkNoisePhase + tN * 2.4 + 51.7) * 0.12;
+        // Low-freq sinuous wander — independent of jAmp so cranking jitter
+        // doesn't compound it. Decoupled X/Z phases so the trunk doesn't just
+        // bend in one plane.
+        if (sinAmt > 0) {
+          nX += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq) * sinAmt;
+          nZ += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq + 73.1) * sinAmt;
+        }
         let dx = startDirX + nX;
         let dy = startDirY + nY;
         let dz = startDirZ + nZ;
@@ -4377,17 +4431,31 @@ function tubeFromChain(chain) {
   // Match the slider range. Keep both clamps strict so a malformed preset
   // (or older save) can't push the values into the unstable region.
   const tubularPerStep = Math.max(4, Math.min(10, P.barkTubularDensity ?? 6));
-  const fullTub = Math.min(384, Math.max(12, (pts.length - 1) * tubularPerStep));
+  // Cap raised 384 → 768. Long trunks with many skeleton subdivisions × high
+  // mesh smoothness used to truncate at 384, which created a visible polycount
+  // discontinuity between the unclamped twigs and the clamped trunk.
+  const fullTub = Math.min(768, Math.max(12, (pts.length - 1) * tubularPerStep));
   const baseRad = Math.max(8, Math.min(24, P.barkRadialSegs ?? 16));
   // Twigs (root radius < 0.3 m) auto-halve sides since their silhouette is
   // dominated by the bark normal map at typical distance, never by the
   // polygon count. Capped at 4 minimum so even an 8-side trunk yields a
   // sane 4-side twig.
   const fullRad = r0 > 0.3 ? baseRad : Math.max(4, baseRad >> 1);
+  // Trunk chain detection — needed before the scrub-downsize gate so the
+  // user can drag Mesh sides / Mesh smoothness / Skeleton subdivisions and
+  // see the actual result, not a quartered preview.
+  const isTrunkChain = (() => {
+    for (const n of chain) if (n.branchLevel !== undefined) return false;
+    return true;
+  })();
   // Aggressive scrub detail: slider drags rebuild ~7×/s — quarter-res keeps
   // the preview responsive on big trees. Drag-end triggers a full rebuild.
-  const tubular = isScrubbing ? Math.max(4, Math.floor(fullTub * 0.28)) : fullTub;
-  const radial  = isScrubbing ? Math.max(4, Math.floor(fullRad * 0.5))  : fullRad;
+  // Trunk chains skip the downsize: dragging a trunk subdivision slider with
+  // a quartered preview is misleading because the user can't see what their
+  // actual setting produces. Branches stay quartered (still hundreds of
+  // chains, dominant cost on big trees).
+  const tubular = (isScrubbing && !isTrunkChain) ? Math.max(4, Math.floor(fullTub * 0.28)) : fullTub;
+  const radial  = (isScrubbing && !isTrunkChain) ? Math.max(4, Math.floor(fullRad * 0.5))  : fullRad;
   const geo = new THREE.TubeGeometry(curve, tubular, r0, radial, false);
   const pos = geo.attributes.position;
   const arr = pos.array;
@@ -4423,14 +4491,8 @@ function tubeFromChain(chain) {
   // orientation (branches at any angle share the same bark density).
   const curveLenForDisp = hasDisplace ? curve.getLength() : 0;
   // Precompute taper samples once per row instead of per vertex.
-  // Radius Curve is trunk-only — a chain is a trunk if NONE of its nodes
-  // were stamped with a branchLevel (trunk nodes are built outside
-  // walkInternode so they keep branchLevel === undefined). This covers
-  // single-trunk and multi-trunk (trunkCount > 1) cases consistently.
-  const isTrunkChain = (() => {
-    for (const n of chain) if (n.branchLevel !== undefined) return false;
-    return true;
-  })();
+  // (isTrunkChain is computed earlier so the scrub-downsize gate can read
+  // it; Radius Curve / buttress / etc. below also rely on it.)
   const taperRow = new Float32Array(tubular + 1);
   const hasTaper = !!taperSpline && isTrunkChain;
   if (hasTaper) {
@@ -5004,6 +5066,15 @@ let _cachedChainsSer = null;
 // leafInstA / leafInstB hoisted near leafGeo — don't redeclare here.
 let coneInst = null;
 const leafDataA = [];
+// leafDataB / leafInstB / leafMatB / needleMatB are reserved for an optional
+// dual-leaf-shape mode (random 50/50 split between two materials, like a real
+// tree's leaf variation). Currently unused — `_foliagePhase` only writes to
+// leafDataA, so leafDataB stays empty. Kept declared because:
+//   • restoring the split would cost ~2× draw calls + matrix work per frame;
+//   • removing fully touches ~30 sites (snapshot/restore, dieback, bake,
+//     visibility, LOD count) with regression risk for negligible savings.
+// Iterations over [leafDataA, leafDataB] no-op on the empty array — zero
+// runtime cost. Don't restore the split unless the perf budget allows it.
 const leafDataB = [];
 // Pine cone geometry + material (reused across rebuilds)
 const coneGeo = new THREE.ConeGeometry(0.35, 1, 8, 4, false);
@@ -5519,7 +5590,13 @@ function updateBark() {
   const posAttr = treeMesh.geometry.attributes.position;
   const arr = posAttr.array;
   const nA = barkNodeA, nB = barkNodeB, nW = barkNodeW;
-  const count = nA.length;
+  // Use the geometry's actual vertex count, NOT nA.length. The bark-node
+  // typed-array pools are grow-only, so when the user shrinks mesh sides /
+  // smoothness via tubesOnly, nA.length stays at the previous larger size
+  // while totalVerts drops. Iterating to nA.length reads stale node indices
+  // and writes past the live buffer's bounds → "exploded" mesh that fixed
+  // itself only after a full rebuild repopulated the pool to a matching size.
+  const count = posAttr.count;
   // Hoist all SoA array refs into locals. JIT registers > object property chase.
   const pX = skPosX, pY = skPosY, pZ = skPosZ;
   const rX = skRestX, rY = skRestY, rZ = skRestZ;
@@ -6579,6 +6656,11 @@ async function _tubesOnlyRebuild(myGen) {
   // Manual bounding-box + sphere from the inline scan. Skips the separate
   // O(V) computeBoundingBox / computeBoundingSphere walks three.js would do.
   _assignTreeBounds(treeGeo, _minX, _minY, _minZ, _maxX, _maxY, _maxZ);
+  // Stale-check before commit: if a newer build superseded us during the
+  // sync-fallback pool-fill above, drop this stale geometry on the floor.
+  // (The worker path already guards earlier; this protects the rare case
+  // where the worker bailed and the main-thread fallback ran instead.)
+  if (myGen !== _buildGen) { treeGeo.dispose?.(); return false; }
   treeMesh.geometry = treeGeo;
   if (oldGeo && oldGeo.dispose) oldGeo.dispose();
   // Refresh the pristine rest pose. updateBark reads this every frame.
@@ -6751,6 +6833,11 @@ async function generateTree(opts = {}) {
       buttressHeight: P.buttressHeight ?? 1.5,
       buttressLobes: P.buttressLobes ?? 5,
       reactionWood: P.reactionWood ?? 0,
+      // Mesh subdivision — must be in BOTH the full-build payload and the
+      // tubesOnly payload, otherwise the worker falls back to its hardcoded
+      // defaults (16/6) and the slider visibly does nothing.
+      radialSegs: P.barkRadialSegs ?? 16,
+      tubularDensity: P.barkTubularDensity ?? 6,
     };
     const combined = await buildTreeAndTubesViaWorker(profilePts, taperPts, isScrubbing, displace);
     if (myGen !== _buildGen) return; // stale — newer build took over
@@ -8104,7 +8191,10 @@ function speciesIconName(k) {
 function addSectionLabel(text, treeType, iconName) {
   const el = document.createElement('div');
   el.className = 'section-label';
-  if (iconName) el.appendChild(iconEl(iconName, 12));
+  if (iconName) {
+    el.appendChild(iconEl(iconName, 12));
+    el.dataset.icon = iconName;          // read by the floating section rail
+  }
   const span = document.createElement('span');
   span.textContent = text;
   el.appendChild(span);
@@ -8538,7 +8628,6 @@ buildConiferGroup('Twigs');
 addSectionLabel('Foliage', 'broadleaf', 'leaf');
 buildParamGroup('Leaves', { scope: 'leaves' });
 buildParamGroup('Stems', { scope: 'leaves' });
-buildParamGroup('Compound leaves', { scope: 'leaves' });
 buildParamGroup('Leaf Material');
 {
   const details = document.createElement('details');
@@ -10961,8 +11050,13 @@ function _buildRiggedBark({ bakeWind = true } = {}) {
   // 2. Bark geometry with rest-pose positions + skin attributes.
   const srcGeo = treeMesh.geometry;
   const geo = new THREE.BufferGeometry();
-  const vCount = barkRestPos.length / 3;
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(barkRestPos), 3));
+  // Live geometry count, NOT the pool size — pools are grow-only and would
+  // pad the export with stale vertices.
+  const vCount = srcGeo.attributes.position.count;
+  // .slice() returns a copy of just the live vert range; the underlying pool
+  // can be bigger after a mesh-detail shrink and would otherwise leak stale
+  // verts into the export.
+  geo.setAttribute('position', new THREE.BufferAttribute(barkRestPos.slice(0, vCount * 3), 3));
   if (srcGeo.attributes.uv) {
     geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(srcGeo.attributes.uv.array), 2));
   }
@@ -12734,25 +12828,166 @@ function niceRulerMeters(target) {
 }
 
 function updateTreeInfo() {
-  if (!treeInfoEl) return;
-  // Pixels per meter at the camera target depth — matches on-screen sizes at
-  // the focus point. Ruler + silhouette automatically rescale as you zoom.
-  const dist = camera.position.distanceTo(controls.target);
-  const canvasH = canvasWrap.clientHeight || renderer.domElement.height;
-  const fovRad = camera.fov * Math.PI / 180;
-  const pxPerM = (canvasH * 0.5) / (dist * Math.tan(fovRad * 0.5));
+  // Scale ruler retired in favour of the 3D axis gizmo (#axis-gizmo). Kept
+  // as a no-op so existing call sites stay valid; the element itself is
+  // still in the DOM but never populated.
+  if (treeInfoEl && treeInfoEl.innerHTML !== '') treeInfoEl.innerHTML = '';
+}
 
-  // Ruler: pick the "nicest" round length that lands around ~100 px wide.
-  const targetPx = 100;
-  const rulerM = niceRulerMeters(targetPx / pxPerM);
-  const rulerPx = Math.max(30, Math.round(rulerM * pxPerM));
-  const label = rulerM >= 1 ? `${rulerM} m` : `${Math.round(rulerM * 100)} cm`;
+// --- Bottom-left 3D axis gizmo -----------------------------------------
+// Lightweight SVG widget that mirrors the camera orientation, like the
+// XYZ indicator in Blender / Maya / Unity. Pure 2D; no extra render pass.
+const axisGizmoEl = document.getElementById('axis-gizmo');
+let _axisGizmoBuilt = false;
+const _axisGizmoState = { tips: [], labels: {}, group: null };
+function _buildAxisGizmo() {
+  if (!axisGizmoEl || _axisGizmoBuilt) return;
+  _axisGizmoBuilt = true;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '-32 -32 64 64');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  const g = document.createElementNS(svgNS, 'g');
+  g.setAttribute('class', 'ag-stack');
+  svg.appendChild(g);
+  axisGizmoEl.appendChild(svg);
+  // 6 axes: X+, X-, Y+, Y-, Z+, Z-. Stored with metadata for sort + render.
+  const axes = [
+    { axis: 0, sign: +1, color: '#ff5d6c', letter: 'X' },
+    { axis: 0, sign: -1, color: '#ff5d6c', letter: 'X' },
+    { axis: 1, sign: +1, color: '#7ce081', letter: 'Y' },
+    { axis: 1, sign: -1, color: '#7ce081', letter: 'Y' },
+    { axis: 2, sign: +1, color: '#5b9dff', letter: 'Z' },
+    { axis: 2, sign: -1, color: '#5b9dff', letter: 'Z' },
+  ];
+  for (const a of axes) {
+    const grp = document.createElementNS(svgNS, 'g');
+    grp.setAttribute('class', 'ag-axis');
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', '0');
+    line.setAttribute('y1', '0');
+    line.setAttribute('stroke', a.color);
+    line.setAttribute('stroke-width', '1.6');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('pointer-events', 'none');
+    grp.appendChild(line);
+    // Larger transparent hit target so the tip catches clicks even when it
+    // shrinks behind the visible disc.
+    const hit = document.createElementNS(svgNS, 'circle');
+    hit.setAttribute('r', '10');
+    hit.setAttribute('fill', 'transparent');
+    hit.setAttribute('class', 'ag-hit');
+    hit.style.cursor = 'pointer';
+    grp.appendChild(hit);
+    const tip = document.createElementNS(svgNS, 'circle');
+    tip.setAttribute('r', a.sign > 0 ? '7' : '5');
+    tip.setAttribute('fill', a.sign > 0 ? a.color : 'transparent');
+    tip.setAttribute('stroke', a.color);
+    tip.setAttribute('stroke-width', '1.4');
+    tip.setAttribute('pointer-events', 'none');
+    grp.appendChild(tip);
+    let label = null;
+    if (a.sign > 0) {
+      label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('dominant-baseline', 'central');
+      label.setAttribute('font-size', '7.5');
+      label.setAttribute('font-weight', '700');
+      label.setAttribute('fill', '#0d0d10');
+      label.setAttribute('font-family', 'ui-sans-serif, system-ui, sans-serif');
+      label.setAttribute('pointer-events', 'none');
+      label.textContent = a.letter;
+      grp.appendChild(label);
+    }
+    // pointerdown (not click) so we win the race against any capture-phase
+    // pointerdown listeners on the canvas / document.
+    hit.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      _axisGizmoFlyTo(a.axis, a.sign);
+    });
+    g.appendChild(grp);
+    _axisGizmoState.tips.push({ ...a, grp, line, tip, hit, label });
+  }
+  _axisGizmoState.group = g;
+}
 
-  treeInfoEl.innerHTML =
-    `<div class="ti-ruler">` +
-      `<div class="ti-bar" style="width:${rulerPx}px"></div>` +
-      `<span>${label}</span>` +
-    `</div>`;
+// Animate the camera to view the scene from the given axis direction.
+// axisIdx: 0=X, 1=Y, 2=Z.  sign: +1 / -1.
+function _axisGizmoFlyTo(axisIdx, sign) {
+  const center = new THREE.Vector3();
+  let fitDist;
+  if (treeMesh && treeMesh.geometry) {
+    // Always recompute — cached bbox can be stale after a rebuild and the
+    // matrix-aware `_assignTreeBounds` path occasionally leaves degenerate
+    // values that produce NaN distances.
+    treeMesh.geometry.computeBoundingBox();
+    const bbox = treeMesh.geometry.boundingBox;
+    if (bbox && Number.isFinite(bbox.min.x) && Number.isFinite(bbox.max.x)) {
+      bbox.getCenter(center);
+      const size = new THREE.Vector3();
+      bbox.getSize(size);
+      fitDist = Math.max(size.x, size.y, size.z) * 1.9;
+    }
+  }
+  if (!Number.isFinite(fitDist) || fitDist <= 0) {
+    center.copy(controls.target);
+    fitDist = Math.max(0.1, camera.position.distanceTo(controls.target));
+  }
+  const off = new THREE.Vector3();
+  off.setComponent(axisIdx, sign * fitDist);
+  // Top / bottom views: nudge slightly off-axis so OrbitControls doesn't lock
+  // into the gimbal-singularity at exact ±Y.
+  if (axisIdx === 1) off.z += 0.01 * sign;
+  reframeAnim = {
+    fromCam: camera.position.clone(),
+    fromTarget: controls.target.clone(),
+    toCam: center.clone().add(off),
+    toTarget: center.clone(),
+    t: 0, duration: 0.7,
+  };
+}
+const _axisV = new THREE.Vector3();
+const _axisQ = new THREE.Quaternion();
+function updateAxisGizmo() {
+  if (!axisGizmoEl) return;
+  if (!_axisGizmoBuilt) _buildAxisGizmo();
+  // World→view rotation. Strip translation by using camera quaternion only.
+  // Inverse camera quaternion takes world vectors to view space.
+  _axisQ.copy(camera.quaternion).invert();
+  const R = 22; // tip radius in viewBox units (viewBox is 64×64 around 0)
+  const tips = _axisGizmoState.tips;
+  for (const t of tips) {
+    _axisV.set(0, 0, 0);
+    _axisV.setComponent(t.axis, t.sign);
+    _axisV.applyQuaternion(_axisQ);
+    // SVG y is down; flip vector y so +Y world reads as up on screen.
+    const x = _axisV.x * R;
+    const y = -_axisV.y * R;
+    t._x = x; t._y = y; t._z = _axisV.z;
+    t.line.setAttribute('x2', x.toFixed(2));
+    t.line.setAttribute('y2', y.toFixed(2));
+    t.tip.setAttribute('cx', x.toFixed(2));
+    t.tip.setAttribute('cy', y.toFixed(2));
+    // Click hit-ring tracks the visible tip — without this, every hit ring
+    // stays at the gizmo origin and only one axis catches clicks.
+    if (t.hit) {
+      t.hit.setAttribute('cx', x.toFixed(2));
+      t.hit.setAttribute('cy', y.toFixed(2));
+    }
+    if (t.label) {
+      t.label.setAttribute('x', x.toFixed(2));
+      t.label.setAttribute('y', y.toFixed(2));
+    }
+    // Back-facing axes fade so the front ones read clearly.
+    const back = _axisV.z < 0;
+    t.grp.style.opacity = back ? '0.45' : '1';
+  }
+  // SVG draws in DOM order (no z-index); reappend tips in z-ascending order
+  // so larger-z (closer to camera) renders on top of smaller-z.
+  const sorted = tips.slice().sort((a, b) => a._z - b._z);
+  const g = _axisGizmoState.group;
+  for (const t of sorted) g.appendChild(t.grp);
 }
 
 // --- Stats overlay ------------------------------------------------------
@@ -13071,6 +13306,8 @@ async function animate() {
   // Floating per-tree stat labels: cheap DOM transform writes, must run
   // every frame so they stay locked to their meshes during orbit / reframe.
   _updateTreeLabelPositions();
+  // 3D axis indicator (XYZ gizmo): refresh whenever the camera moved.
+  if (sceneMoving || _renderDirtyFrames > 0 || !_axisGizmoBuilt) updateAxisGizmo();
   _animateErrStreak = 0;
  } catch (e) {
   // One bad frame shouldn't kill the whole app. Keep the loop going; if we
@@ -13174,18 +13411,23 @@ let rebuildSectionRail = () => {};
       inner.textContent = '';
       for (const el of sbBody.querySelectorAll(':scope > .section-label')) {
         if (el.style.display === 'none') continue;
-        const txt = el.querySelector(':scope > span')?.textContent?.trim();
+        // The label's first <span> is the .sec-icon wrapper (no text).
+        // The text lives on a sibling span — :not(.sec-icon) picks it.
+        const txt = el.querySelector(':scope > span:not(.sec-icon)')?.textContent?.trim();
         if (!txt) continue;
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'section-notch';
         btn.setAttribute('aria-label', txt);
-        // Clone the section-label's existing icon so the rail visually
-        // matches whatever art the section ships with.
-        const srcIcon = el.querySelector(':scope > .sec-icon');
-        if (srcIcon) {
-          const ic = srcIcon.cloneNode(true);
-          ic.classList.add('section-notch-icon');
+        // Build a fresh icon via iconSvg — cloning the sidebar's .sec-icon
+        // span doesn't render reliably outside the #sidebar scope (its CSS
+        // sizing is scoped, and color inheritance breaks when the cloned
+        // node lands in a different DOM subtree).
+        const iconName = el.dataset.icon;
+        if (iconName) {
+          const ic = document.createElement('span');
+          ic.className = 'section-notch-icon';
+          ic.innerHTML = iconSvg(iconName, 16);
           btn.appendChild(ic);
         }
         const tip = document.createElement('span');
@@ -13196,6 +13438,39 @@ let rebuildSectionRail = () => {};
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
         inner.appendChild(btn);
+
+        // Branching section: append a numbered sub-notch per level so the
+        // user can jump straight to Level 1, 2, … from the rail.
+        if (txt.toLowerCase() === 'branching') {
+          const lw = document.getElementById('levels-wrapper');
+          if (lw && lw.style.display !== 'none') {
+            const levelCards = lw.querySelectorAll(':scope > details');
+            let n = 0;
+            for (const card of levelCards) {
+              const label = card.querySelector(':scope > summary .sec-label');
+              if (!label || !/^Level\s+\d+/i.test(label.textContent || '')) continue;
+              n += 1;
+              const num = n;
+              const sub = document.createElement('button');
+              sub.type = 'button';
+              sub.className = 'section-notch section-notch-sub';
+              sub.setAttribute('aria-label', `Level ${num}`);
+              const lbl = document.createElement('span');
+              lbl.className = 'section-notch-num';
+              lbl.textContent = String(num);
+              sub.appendChild(lbl);
+              const stip = document.createElement('span');
+              stip.className = 'section-notch-tip';
+              stip.textContent = `Level ${num}`;
+              sub.appendChild(stip);
+              sub.addEventListener('click', () => {
+                if (!card.hasAttribute('open')) card.setAttribute('open', '');
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              });
+              inner.appendChild(sub);
+            }
+          }
+        }
       }
     });
   };
@@ -13232,6 +13507,9 @@ const _renderLevelsOrig = renderLevels;
 renderLevels = function (...args) {
   _renderLevelsOrig(...args);
   wrapDetailsForAnimation(document.getElementById('levels-wrapper'));
+  // Section rail mirrors the level cards as numbered sub-notches under the
+  // Branching icon, so it has to refresh whenever a level is added/removed.
+  rebuildSectionRail();
 };
 
 // --- Custom select dropdown ---------------------------------------------
@@ -13918,6 +14196,35 @@ new MutationObserver(() => enhanceAllSelects()).observe(document.body, { childLi
     }
     if (touched) { classify(); applyTab(activeTab); }
   }).observe(body, { childList: true });
+})();
+
+// --- Sticky stack height tracker ----------------------------------------
+// `.sb-tabs` and `.tree-type-sticky` both pin at top:0, overlapping rather
+// than stacking. The visible stack height is whichever one is taller (the
+// higher-z-index `.tree-type-sticky` sits on top, but if `.sb-tabs` is
+// taller it would poke out from behind). Use Math.max for safety.
+(function initStickyStackTracker() {
+  const body = document.getElementById('sidebar-body');
+  if (!body) return;
+  const measure = () => {
+    let tabs = 0, top = 0;
+    for (const el of body.children) {
+      if (el.classList?.contains('sb-tabs')) tabs = el.offsetHeight;
+      else if (el.classList?.contains('tree-type-sticky')) top = el.offsetHeight;
+    }
+    body.style.setProperty('--sb-sticky-h', Math.max(tabs, top) + 'px');
+  };
+  measure();
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(measure);
+    for (const el of body.children) {
+      if (el.classList?.contains('sb-tabs') ||
+          el.classList?.contains('tree-type-sticky')) {
+        ro.observe(el);
+      }
+    }
+  }
+  new MutationObserver(measure).observe(body, { childList: true, subtree: true });
 })();
 
 animate();

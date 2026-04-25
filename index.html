@@ -18,19 +18,15 @@
 </head>
 <body>
   <div id="splash">
-    <svg class="splash-logo" viewBox="0 0 64 80" aria-hidden="true">
-      <g class="sl-tree">
-        <path class="sl-trunk" d="M32 72 V44" />
-        <path class="sl-branch sl-b1" d="M32 54 L22 42" />
-        <path class="sl-branch sl-b2" d="M32 48 L42 36" />
-        <path class="sl-branch sl-b3" d="M32 44 L26 32" />
-        <circle class="sl-leaf sl-l1" cx="22" cy="42" r="2.2" />
-        <circle class="sl-leaf sl-l2" cx="42" cy="36" r="2.2" />
-        <circle class="sl-leaf sl-l3" cx="26" cy="32" r="2.2" />
-        <circle class="sl-leaf sl-l4" cx="32" cy="26" r="2.6" />
-      </g>
-    </svg>
-    <div class="splash-title">windy tree</div>
+    <div class="splash-mark" aria-hidden="true">
+      <svg class="splash-ring" viewBox="0 0 40 40">
+        <circle class="ring-track" cx="20" cy="20" r="17" />
+        <circle class="ring-arc"   cx="20" cy="20" r="17" />
+      </svg>
+      <span class="splash-dot"></span>
+    </div>
+    <div class="splash-title">WINDY TREE</div>
+    <div class="splash-meta">Initialising&nbsp;WebGPU</div>
     <div class="splash-progress" aria-hidden="true"></div>
   </div>
 <div id="layout">
@@ -41,6 +37,7 @@
       </div>
       <div id="stats"></div>
       <div id="tree-info"></div>
+      <div id="axis-gizmo" aria-hidden="true"></div>
       <div id="canvas-tips"></div>
       <div id="grab-halo" hidden></div>
       <div id="brush-cursor" hidden></div>

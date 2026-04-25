@@ -18,8 +18,13 @@ export const PARAM_SCHEMA = [
     // Both run on the tubes-only fast path (no skeleton rebuild). Bark UVs
     // are metric (world meters), so changing these doesn't stretch the bark
     // texture — only the silhouette gets coarser/finer.
-    { key: 'barkRadialSegs',     label: 'Mesh sides',       min: 8, max: 24, step: 1, default: 16, tubesOnly: true },
-    { key: 'barkTubularDensity', label: 'Mesh smoothness',  min: 4, max: 10, step: 1, default: 6,  tubesOnly: true },
+    // Hidden — earlier attempts to expose these caused exploded geometry
+    // (grow-only pool mismatch on tubesOnly path) and NaN positions on the
+    // full-rebuild path. Reverted to hidden until both paths are properly
+    // bulletproofed. Defaults (16 sides / 6 per step) cover the full range
+    // of tree sizes safely. JSON imports of older saves still load.
+    { key: 'barkRadialSegs',     label: 'Mesh sides',       min: 8, max: 24, step: 1, default: 16, hidden: true },
+    { key: 'barkTubularDensity', label: 'Mesh smoothness',  min: 4, max: 10, step: 1, default: 6,  hidden: true },
     // Gnarliness — lateral noise applied to chain node positions during
     // skeleton build (SpeedTree calls this "wood noise", ezTree calls it
     // "gnarliness"). Branches inherit because they spawn off the wobbled
@@ -43,6 +48,12 @@ export const PARAM_SCHEMA = [
     { key: 'trunkLean',        label: 'Lean',         min: 0,    max: 1.2,  step: 0.01, default: 0 },
     { key: 'trunkLeanDir',     label: 'Lean dir',     min: 0,    max: 360,  step: 1,    default: 0 },
     { key: 'trunkBow',         label: 'Bow',          min: 0,    max: 2,    step: 0.02, default: 0 },
+    // Long-wavelength lateral wander applied to the trunk's reference curve
+    // only — this is the "ancient/winding" character. Independent of the
+    // mid/high-freq trunk noise that drives Jitter, and 100% on the cheap
+    // ref-curve path (64 evaluations total, zero new vertices).
+    { key: 'trunkSinuous',     label: 'Sinuous',      min: 0,    max: 1.5,  step: 0.02, default: 0 },
+    { key: 'trunkSinuousFreq', label: 'Sinuous freq', min: 0.3,  max: 4,    step: 0.1,  default: 1.0 },
     // Radius model (Weber-Penn parametric): trunk radius is a direct slider,
     // branches taper from baseRadius → tipRadius via taperExp, children scale
     // from parent-local radius via per-level radiusRatio.
@@ -66,21 +77,21 @@ export const PARAM_SCHEMA = [
     { key: 'barkDisplaceFreq',   label: 'Displace freq', min: 0.5, max: 12, step: 0.1, default: 3.0, tubesOnly: true },
     { key: 'barkRidgeSharp',     label: 'Ridge sharpness', min: 0, max: 1, step: 0.02, default: 0.55, tubesOnly: true },
     { key: 'barkVerticalBias',   label: 'Vertical bias', min: 0, max: 1, step: 0.02, default: 0.8, tubesOnly: true },
-    // Knots, micro-detail, and buttress default to 0. They each add an extra
-    // per-vertex noise/cosine evaluation in tubeFromChain — on a 250k-vert
-    // bark mesh that's hundreds of ms of tube-extrusion time most users never
-    // see at typical viewing distance. Opt back in via the slider when you
-    // genuinely want gnarly bark.
-    { key: 'barkKnots',          label: 'Knots',        min: 0, max: 1.5, step: 0.02, default: 0, tubesOnly: true },
-    { key: 'barkKnotScale',      label: 'Knot scale',   min: 0.5, max: 6, step: 0.1, default: 2.0, tubesOnly: true },
-    { key: 'barkDetail',         label: 'Micro detail', min: 0, max: 1,   step: 0.02, default: 0, tubesOnly: true },
-    { key: 'barkDetailFreq',     label: 'Detail freq',  min: 4,  max: 40, step: 0.5, default: 12.0, tubesOnly: true },
-    { key: 'buttressAmount', label: 'Buttress',       min: 0, max: 2,   step: 0.02, default: 0, tubesOnly: true },
-    { key: 'buttressHeight', label: 'Buttress H',     min: 0.3, max: 5, step: 0.1,  default: 1.5, tubesOnly: true },
-    { key: 'buttressLobes',  label: 'Buttress lobes', min: 2,   max: 10,step: 1,    default: 5, tubesOnly: true },
+    // --- Decorative bark effects, hidden by default (all default 0) ---
+    // Each adds an extra per-vertex noise/cosine evaluation in tubeFromChain.
+    // Most users never touch these — kept available for hero-shot tuning via
+    // saved JSON / spotlight, but off the main UI to declutter the Trunk
+    // card. Code paths intact.
+    { key: 'barkKnots',          label: 'Knots',        min: 0, max: 1.5, step: 0.02, default: 0, tubesOnly: true, hidden: true },
+    { key: 'barkKnotScale',      label: 'Knot scale',   min: 0.5, max: 6, step: 0.1, default: 2.0, tubesOnly: true, hidden: true },
+    { key: 'barkDetail',         label: 'Micro detail', min: 0, max: 1,   step: 0.02, default: 0, tubesOnly: true, hidden: true },
+    { key: 'barkDetailFreq',     label: 'Detail freq',  min: 4,  max: 40, step: 0.5, default: 12.0, tubesOnly: true, hidden: true },
+    { key: 'buttressAmount', label: 'Buttress',       min: 0, max: 2,   step: 0.02, default: 0, tubesOnly: true, hidden: true },
+    { key: 'buttressHeight', label: 'Buttress H',     min: 0.3, max: 5, step: 0.1,  default: 1.5, tubesOnly: true, hidden: true },
+    { key: 'buttressLobes',  label: 'Buttress lobes', min: 2,   max: 10,step: 1,    default: 5, tubesOnly: true, hidden: true },
     // Reaction wood — asymmetric radial thickening on the compression side
-    // of horizontal branches. Simulates gravitropic response in hardwoods.
-    { key: 'reactionWood',   label: 'Reaction wood',  min: 0, max: 1,   step: 0.02, default: 0, tubesOnly: true },
+    // of horizontal branches. Niche; default off.
+    { key: 'reactionWood',   label: 'Reaction wood',  min: 0, max: 1,   step: 0.02, default: 0, tubesOnly: true, hidden: true },
   ]},
   { group: 'Bark', params: [
     { key: 'barkHue',            label: 'Hue',          min: 0, max: 1,   step: 0.01, default: 0.08, live: true },
@@ -134,8 +145,6 @@ export const PARAM_SCHEMA = [
     { key: 'leafStemLen',         label: 'Length',         min: 0,    max: 0.5, step: 0.01, default: 0.05 },
     { key: 'leafStemAngle',       label: 'Forward lean',   min: 0,    max: 1,   step: 0.02, default: 0.3 },
     { key: 'leafStemThick',       label: 'Thickness',      min: 0.3,  max: 3,   step: 0.05, default: 1.0 },
-    { key: 'leafStemColor',       label: 'Hue',            min: 0,    max: 1,   step: 0.01, default: 0.08, live: true },
-    { key: 'leafStemTaper',       label: 'Taper',          min: 0,    max: 1,   step: 0.02, default: 0.5, hidden: true },
   ]},
   { group: 'Leaf Material', treeType: 'broadleaf', params: [
     // Essentials — the five PBR knobs that actually affect read-at-distance.
@@ -232,6 +241,10 @@ export const LEVEL_SCHEMA = [
   { key: 'lenRatio',        label: 'Length',           min: 0.1, max: 3,    step: 0.02,  default: 0.7  },
   // Weber-Penn branch-radius ratio — child base = parent's local radius × this.
   { key: 'radiusRatio',     label: 'Radius ratio',     min: 0.1, max: 1.0,  step: 0.02,  default: 0.6  },
+  // Weber-Penn branch taper — reshapes radius along each branch's length.
+  //   < 1 spindle/cylindrical (mid stays thick), 1 linear (default),
+  //   1–2 cone (narrows faster toward tip), > 2 periodic oscillation.
+  { key: 'taper',           label: 'Taper',            min: 0,   max: 3,    step: 0.05,  default: 1    },
   { key: 'angle',           label: 'Branch angle',     min: 0,   max: 3.14, step: 0.02,  default: 0.55 },
   { key: 'angleVar',        label: 'Angle variation',  min: 0,   max: 3.14, step: 0.02,  default: 0.3  },
   { key: 'rollVar',         label: 'Roll variation',   min: 0,   max: 6.28, step: 0.02,  default: 0.55 },
@@ -969,9 +982,9 @@ export const BUSH_SCHEMA = [
 export const PARAM_DESCRIPTIONS = {
   // Trunk
   trunkHeight:      'Overall tree height in meters',
-  trunkSteps:       'Trunk skeleton subdivisions — more = smoother trunk silhouette + finer bark displacement, heavier geometry',
-  barkRadialSegs:   'Radial sides of each tube. 6 = hexagon, 16 = smooth (default). Thin twigs auto-halve for efficiency. Tubes-only fast path.',
-  barkTubularDensity: 'Longitudinal segments per skeleton step. Higher = smoother bark curve along the branch length. Tubes-only fast path.',
+  trunkSteps:       'Trunk skeleton control points — this is the shape-detail knob. Higher = the trunk curve has more real bends to follow (Sinuous/Bow/Jitter all act on these). 22 = clean, 36-44 = winding/ancient.',
+  barkRadialSegs:   'Radial sides of each tube. 8 = octagonal, 16 = smooth (default). Thin twigs auto-halve. Tubes-only fast path.',
+  barkTubularDensity: 'Polygon strips between skeleton points — purely a polish knob, no new shape. Push too high and you reveal high-freq bark-displacement noise as visible bumps. Default 6 is the sweet spot; only raise if you see facets between control points.',
   branchWobble:     'Skeleton-level lateral perturbation that gives branches an aged, knotted character (SpeedTree calls this wood noise; ezTree calls it gnarliness). Auto-scaled by branch depth so trunks stay relatively straight and twigs flex. Per-level overrides in each Level card.',
   branchWobbleFreq: 'Spatial scale of the gnarl pattern. Higher = tighter, more frequent bends along each branch.',
   wobble:           'Per-level gnarliness. 0 = inherit global Gnarliness (Trunk card). >0 = override with this absolute value at this level.',
@@ -1104,6 +1117,8 @@ export const PARAM_DESCRIPTIONS = {
   trunkLean:        'Tilt the trunk base — bigger = more lean',
   trunkLeanDir:     'Heading of the lean (degrees around Y)',
   trunkBow:         'S-curve along the trunk as it rises',
+  trunkSinuous:     'Slow lateral meander along the trunk — gives an ancient, winding character without inflating high-frequency jitter. Free (ref-curve path).',
+  trunkSinuousFreq: 'Wavelengths of meander over the trunk height. ~1 = single bend, ~2-3 = serpentine.',
   // Surface (continued)
   buttressAmount:   'Lobed bulge at the trunk base — buttress roots',
   buttressHeight:   'How far up the trunk the buttress fades out (m)',
@@ -1126,11 +1141,6 @@ export const PARAM_DESCRIPTIONS = {
   leafStemLen:      'Petiole length — distance from twig surface to leaf base',
   leafStemAngle:    'Forward lean of the petiole toward the twig tip (0 = perpendicular)',
   leafStemThick:    'Petiole thickness multiplier',
-  leafStemTaper:    'Taper of the petiole from base to tip',
-  leafStemColor:    'Petiole hue',
-  // Compound leaves
-  leafletCount:     'Leaflets per leaf — for compound species (ash, walnut, acacia, rowan)',
-  leafletSpread:    'Spacing between leaflets along the petiole',
   // Leaf material (continued)
   leafBumpScale:    'Vein bump intensity (procedural leaf modes only)',
   leafClearcoat:    'Waxy coat for glossy leaves (laurel, holly)',
@@ -1161,18 +1171,6 @@ export const PARAM_DESCRIPTIONS = {
   stubsTaper:       'How sharply the stub tapers to a point',
   stubsHue:         'Stub hue',
   stubsLum:         'Stub brightness',
-  // Twigs
-  twigsEnable:      'Add a thin twig layer between branch tips and leaves',
-  twigCount:        'Twigs per branch tip',
-  twigLenMin:       'Minimum twig length',
-  twigLenMax:       'Maximum twig length',
-  twigAngle:        'Splay angle of twigs off the parent tip (radians)',
-  twigDroop:        'Downward droop of twigs',
-  twigThickness:    'Twig radius (m)',
-  twigTaper:        'Twig taper from base to tip',
-  twigLeaves:       'Place leaves at twig tips (industry-standard foliage shell)',
-  twigHue:          'Twig colour hue',
-  twigLum:          'Twig brightness',
   // Vines
   vinesEnable:      'Wrap spiral vines around branches',
   vineCount:        'Number of vines',
