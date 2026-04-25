@@ -3189,16 +3189,19 @@ let taperSpline = null;
 let lengthSpline = null;
 let rootsMesh = null;
 let _rootsMat = null;
+// Roots params use prefixed keys (rootCount/rootSpread/...) so the scrubbers'
+// data-pkey doesn't collide with the trunk's baseRadius/tipRadius keys —
+// syncUI() walks all scrubbers and pulls from top-level P[key].
 P.roots = {
   enabled: true,
-  count: 6,
-  spread: 1.6,
-  length: 1.4,
-  depth: 0.6,
-  baseRadius: 0.18,
-  tipRadius: 0.04,
-  jitter: 0.4,
-  rise: 0.25,
+  rootCount: 6,
+  rootSpread: 1.6,
+  rootLength: 1.4,
+  rootDepth: 0.6,
+  rootBaseR: 0.18,
+  rootTipR: 0.04,
+  rootJitter: 0.4,
+  rootRise: 0.25,
 };
 P.physics = {};
 for (const p of PHYSICS_SCHEMA) P.physics[p.key] = p.default;
@@ -6926,17 +6929,17 @@ async function generateTree(opts = {}) {
   scene.add(treeMesh);
   _gtMark('barkmesh');
 
-  if (P.roots && P.roots.enabled && P.roots.count > 0) {
+  if (P.roots && P.roots.enabled && P.roots.rootCount > 0) {
     const trunkBaseR = (P.baseRadius ?? 0.35) * ((P.trunkHeight ?? 10) / 10);
     const rootsGeo = buildRootsGeometry({
-      count: P.roots.count | 0,
-      spread: P.roots.spread,
-      length: P.roots.length,
-      depth: P.roots.depth,
-      baseRadius: P.roots.baseRadius * trunkBaseR / 0.35,
-      tipRadius: P.roots.tipRadius * trunkBaseR / 0.35,
-      jitter: P.roots.jitter,
-      rise: P.roots.rise,
+      count: P.roots.rootCount | 0,
+      spread: P.roots.rootSpread,
+      length: P.roots.rootLength,
+      depth: P.roots.rootDepth,
+      baseRadius: P.roots.rootBaseR * trunkBaseR / 0.35,
+      tipRadius: P.roots.rootTipR * trunkBaseR / 0.35,
+      jitter: P.roots.rootJitter,
+      rise: P.roots.rootRise,
       seed: ((P.seed | 0) ^ 0x12345) >>> 0,
     });
     if (rootsGeo) {
@@ -8082,14 +8085,14 @@ function speciesIconName(k) {
   details.appendChild(toggleRow);
 
   const ROOTS_SCHEMA = [
-    { key: 'count',      label: 'Count',       min: 0,  max: 16,  step: 1,    default: 6 },
-    { key: 'spread',     label: 'Spread',      min: 0.2,max: 5,   step: 0.05, default: 1.6 },
-    { key: 'length',     label: 'Length',      min: 0.3,max: 3,   step: 0.05, default: 1.4 },
-    { key: 'depth',      label: 'Depth',       min: 0,  max: 2,   step: 0.05, default: 0.6 },
-    { key: 'baseRadius', label: 'Base radius', min: 0.02,max:0.6, step: 0.01, default: 0.18 },
-    { key: 'tipRadius',  label: 'Tip radius',  min: 0.005,max:0.3,step: 0.005,default: 0.04 },
-    { key: 'rise',       label: 'Arch rise',   min: 0,  max: 1,   step: 0.02, default: 0.25 },
-    { key: 'jitter',     label: 'Jitter',      min: 0,  max: 1,   step: 0.02, default: 0.4 },
+    { key: 'rootCount',  label: 'Count',       min: 0,    max: 16,  step: 1,    default: 6 },
+    { key: 'rootSpread', label: 'Spread',      min: 0.2,  max: 5,   step: 0.05, default: 1.6 },
+    { key: 'rootLength', label: 'Length',      min: 0.3,  max: 3,   step: 0.05, default: 1.4 },
+    { key: 'rootDepth',  label: 'Depth',       min: 0,    max: 2,   step: 0.05, default: 0.6 },
+    { key: 'rootBaseR',  label: 'Base radius', min: 0.02, max: 0.6, step: 0.01, default: 0.18 },
+    { key: 'rootTipR',   label: 'Tip radius',  min: 0.005,max: 0.3, step: 0.005,default: 0.04 },
+    { key: 'rootRise',   label: 'Arch rise',   min: 0,    max: 1,   step: 0.02, default: 0.25 },
+    { key: 'rootJitter', label: 'Jitter',      min: 0,    max: 1,   step: 0.02, default: 0.4 },
   ];
   for (const p of ROOTS_SCHEMA) {
     const row = createSliderRow(p, () => P.roots[p.key], (v) => { P.roots[p.key] = v; }, () => debouncedGenerate());
