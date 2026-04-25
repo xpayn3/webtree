@@ -3193,7 +3193,7 @@ let _rootsMat = null;
 // data-pkey doesn't collide with the trunk's baseRadius/tipRadius keys —
 // syncUI() walks all scrubbers and pulls from top-level P[key].
 P.roots = {
-  enabled: true,
+  enabled: false,
   rootCount: 6,
   rootSpread: 1.6,
   rootLength: 1.4,
