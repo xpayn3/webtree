@@ -10675,6 +10675,10 @@ function applySpecies(name) {
   applyBarkMaterial();
   applyLeafShape();
   _refreshLeafShapePanel?.();
+  // Collapse all sidebar cards on species change so the user starts from a
+  // clean view of the new preset.
+  const _sb = document.getElementById('sidebar-body');
+  if (_sb) for (const d of _sb.querySelectorAll('details')) d.open = false;
   const p = generateTree();
   commitHistorySoon();
   return p;
@@ -13724,7 +13728,8 @@ new MutationObserver(() => enhanceAllSelects()).observe(document.body, { childLi
     const summary = details.querySelector(':scope > summary');
     if (!summary) return;
     const k = cardKey(details);
-    if (k && k in saved) details.open = saved[k];
+    // Cards always start collapsed on refresh — saved state is no longer
+    // restored. (Save listener kept harmless but unused.)
     const dot = document.createElement('span');
     dot.className = 'sum-dot';
     dot.title = 'Some sliders in this section differ from defaults';
