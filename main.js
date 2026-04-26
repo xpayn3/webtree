@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r1';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r1';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r1';
-import { buildRootsGeometry } from './roots.js?v=r1';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r2';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r2';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r2';
+import { buildRootsGeometry } from './roots.js?v=r2';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -5905,7 +5905,10 @@ function reframeToTree() {
 // Called inside generateTree when treeType === 'conifer' so the shared
 // tree-building engine produces a conical pine/spruce/cedar.
 function applyConiferConfigToP() {
-  // Primary whorl-ish branches along the trunk + short twigs
+  // Primary whorl-ish branches along the trunk + short twigs.
+  // Conifer branches are thinner at the trunk attachment than broadleaf and
+  // taper hard toward the tip — set radiusRatio + taper here so every conifer
+  // preset gets the right silhouette without needing to spell it out.
   P.levels = [
     {
       ...makeDefaultLevel(),
@@ -5921,6 +5924,9 @@ function applyConiferConfigToP() {
       gravitropism: P.cBranchDroop,
       phototropism: 0,
       distortion: 0.06,
+      // Slim attachment + cone taper — real conifer limbs read as needles.
+      radiusRatio: P.cBranchRadiusRatio ?? 0.32,
+      taper: P.cBranchTaper ?? 1.5,
     },
     {
       ...makeDefaultLevel(),
@@ -5933,6 +5939,8 @@ function applyConiferConfigToP() {
       apicalDominance: 0.2,
       phototropism: 0,
       distortion: 0.1,
+      radiusRatio: P.cTwigRadiusRatio ?? 0.28,
+      taper: P.cTwigTaper ?? 1.4,
     },
   ];
   // Needle-like leaves

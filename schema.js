@@ -921,11 +921,15 @@ export const CONIFER_SCHEMA = [
     { key: 'cCrownTaper',   label: 'Crown taper',   min: 0,    max: 1,    step: 0.02, default: 0.75 },
     { key: 'cBranchDroop',  label: 'Branch droop',  min: 0,    max: 0.3,  step: 0.002,default: 0.025 },
     { key: 'cBranchLen',    label: 'Branch length', min: 0.15, max: 1.8,  step: 0.02, default: 0.42 },
+    { key: 'cBranchRadiusRatio', label: 'Branch attach', min: 0.05, max: 0.8, step: 0.01, default: 0.32 },
+    { key: 'cBranchTaper',  label: 'Branch taper',  min: 0.2,  max: 3,    step: 0.05, default: 1.5 },
   ]},
   { group: 'Twigs', params: [
     { key: 'cTwigCount',    label: 'Twigs/branch',  min: 2,    max: 10,   step: 1,    default: 6 },
     { key: 'cTwigLen',      label: 'Twig length',   min: 0.3,  max: 0.95, step: 0.02, default: 0.6 },
     { key: 'cTwigAngle',    label: 'Twig angle',    min: 0.3,  max: 1.3,  step: 0.05, default: 0.95 },
+    { key: 'cTwigRadiusRatio', label: 'Twig attach', min: 0.05, max: 0.8, step: 0.01, default: 0.28 },
+    { key: 'cTwigTaper',    label: 'Twig taper',    min: 0.2,  max: 3,    step: 0.05, default: 1.4 },
   ]},
   { group: 'Needles', params: [
     { key: 'cNeedleLength', label: 'Length',        min: 0.1,  max: 0.8,  step: 0.01, default: 0.35 },
