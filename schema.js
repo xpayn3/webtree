@@ -189,7 +189,7 @@ export const PARAM_SCHEMA = [
     { key: 'leafTransmission',    label: 'Transmission',  min: 0,    max: 1,   step: 0.02, default: 0.6,  live: true },
     { key: 'leafThickness',       label: 'Thickness',     min: 0,    max: 2,   step: 0.05, default: 0.18, live: true },
     { key: 'leafNormalStrength',  label: 'Normal',        min: 0,    max: 1.5, step: 0.05, default: 0.55, live: true },
-    { key: 'leafSheen',           label: 'Wax sheen',     min: 0,    max: 1,   step: 0.02, default: 0.4,  live: true },
+    { key: 'leafSheen',           label: 'Wax sheen',     min: 0,    max: 1,   step: 0.02, default: 0.15, live: true },
     { key: 'leafHueShift',        label: 'Hue shift',     min: -0.3, max: 0.3, step: 0.01, default: 0,    live: true, swatch: 'hue' },
     // Manual leaf-color override. When `leafColorOverride` is true, the
     // material color is set directly from `leafColor` (hex), bypassing the

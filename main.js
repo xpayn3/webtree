@@ -8166,7 +8166,14 @@ async function generateTree(opts = {}) {
   }
 
   applyTreeRotation();
-  _drainOrphanList(_orphanBark); _drainOrphanList(_orphanFoliage);
+  _drainOrphanList(_orphanBark);
+  // Foliage orphans are only drained when this tick actually rebuilt foliage.
+  // During shape-slider scrubs (`_scrubFoliage=true`) `_foliagePhase` is
+  // skipped — draining would remove the old leaves with nothing to replace
+  // them, so the user sees the canopy disappear mid-drag (or flicker if
+  // ticks alternate between cached/full-fallback paths). Keep them in scene
+  // as visible orphans until endScrub's final-quality rebuild drains them.
+  if (!_scrubFoliage) _drainOrphanList(_orphanFoliage);
   if (!isScrubbing) {
     updateTreeInfo();
     refreshLODUI();
