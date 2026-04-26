@@ -114,7 +114,7 @@ export const PARAM_SCHEMA = [
     { key: 'leavesStart',        label: 'Start height', min: 0,   max: 0.9, step: 0.02, default: 0 },
     { key: 'leafPhyllotaxis',    label: 'Arrangement',  type: 'select', options: ['spiral', 'opposite', 'alternate', 'random'], default: 'alternate' },
     // Size & shape.
-    { key: 'leafSize',           label: 'Size',         min: 0.02, max: 0.5, step: 0.005, default: 0.15, rescale: true },
+    { key: 'leafSize',           label: 'Size',         min: 0.02, max: 1.5, step: 0.005, default: 0.15, rescale: true },
     { key: 'leafSizeVar',        label: 'Size variance',min: 0,   max: 1,   step: 0.05, default: 0.55 },
     // Leaf geometry detail. Industry-standard LOD: silhouette (full shape mesh,
     // ~200 tris/leaf) for hero shots; bent (curved strip, ~32 tris) for medium
@@ -132,7 +132,7 @@ export const PARAM_SCHEMA = [
     // --- Advanced placement (hidden by default — kept for presets / power users) ---
     { key: 'leafChainSteps',     label: 'Branch depth', min: 1,   max: 32,  step: 1,    default: 5,    hidden: true },
     { key: 'leafBranchFill',     label: 'Branch fill',  min: 0,   max: 3,   step: 0.05, default: 1,    hidden: true },
-    { key: 'leafMaxRadius',      label: 'Max twig radius',min: 0.005,max: 0.3, step: 0.005,default: 0.08, hidden: true },
+    { key: 'leafMaxRadius',      label: 'Max twig radius',min: 0.005,max: 1.0, step: 0.005,default: 0.08, hidden: true },
     { key: 'leafInset',          label: 'Plane inset',  min: -0.5,max: 0.5, step: 0.01, default: 0,    hidden: true },
     { key: 'fallenMax',          label: 'Fallen max',   min: 0,   max: 300, step: 5,    default: 120, live: true, hidden: true },
     { key: 'fallenFade',         label: 'Fade time',    min: 0.5, max: 10,  step: 0.1,  default: 3.0, live: true, hidden: true },
