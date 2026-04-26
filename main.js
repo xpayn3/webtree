@@ -4766,13 +4766,15 @@ function buildTree(nodesOut) {
       const sinFreq = (P.trunkSinuousFreq ?? 1.0);
       for (let i = 0; i < REF_TRUNK_STEPS; i++) {
         const tN = (i + 0.5) / REF_TRUNK_STEPS;
-        // Ramp noise / wander in over the first 5 % of trunk height so the
-        // base ring stays perpendicular to the ground. Without this, the
-        // very first segment picks up jitter at full strength → the curve
-        // tangent at the root is tilted → bottom tube ring tilts → one
-        // edge floats and the opposite edge buries. Smooth (smoothstep)
+        // Ramp noise / wander in over the first 15 % of trunk height so
+        // the base ring stays perpendicular to the ground. The first
+        // user-resolution trunk node samples ~refSteps[1] (tN ≈ 0.023);
+        // with a 5 % zone that vert was still ~45 % noisy, leaving the
+        // CatmullRom tangent at root tilted enough to lift one edge of
+        // the bottom tube ring off the floor. 15 % puts the first 1-2
+        // user nodes in the fully-vertical region. Smooth (smoothstep)
         // ramp so there's no visible kink at the transition.
-        const _u = Math.max(0, Math.min(1, tN / 0.05));
+        const _u = Math.max(0, Math.min(1, tN / 0.15));
         const _baseAnchor = _u * _u * (3 - 2 * _u);
         let nX = (smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
                + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3) * _baseAnchor;

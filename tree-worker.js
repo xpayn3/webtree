@@ -686,8 +686,8 @@ function buildTreeWorker(state) {
       for (let i = 0; i < REF_TRUNK_STEPS; i++) {
         const tN = (i + 0.5) / REF_TRUNK_STEPS;
         // Mirror of main.js: ramp jitter / sinuous wander in over the
-        // first 5 % of trunk height so the base ring sits flat.
-        const _u = Math.max(0, Math.min(1, tN / 0.05));
+        // first 15 % of trunk height so the base ring sits flat.
+        const _u = Math.max(0, Math.min(1, tN / 0.15));
         const _baseAnchor = _u * _u * (3 - 2 * _u);
         let nX = (_smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
                + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3) * _baseAnchor;
