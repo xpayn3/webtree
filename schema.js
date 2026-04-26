@@ -181,9 +181,11 @@ export const PARAM_SCHEMA = [
   ]},
   { group: 'Leaf Material', treeType: 'broadleaf', params: [
     // Essentials — the five PBR knobs that actually affect read-at-distance.
-    { key: 'leafRoughness',       label: 'Roughness',     min: 0,    max: 1,   step: 0.02, default: 0.65, live: true },
-    { key: 'leafTransmission',    label: 'Transmission',  min: 0,    max: 1,   step: 0.02, default: 0.45, live: true },
-    { key: 'leafThickness',       label: 'Thickness',     min: 0,    max: 2,   step: 0.05, default: 0.35, live: true },
+    { key: 'leafRoughness',       label: 'Roughness',     min: 0,    max: 1,   step: 0.02, default: 0.6,  live: true },
+    { key: 'leafTransmission',    label: 'Transmission',  min: 0,    max: 1,   step: 0.02, default: 0.6,  live: true },
+    { key: 'leafThickness',       label: 'Thickness',     min: 0,    max: 2,   step: 0.05, default: 0.18, live: true },
+    { key: 'leafNormalStrength',  label: 'Normal',        min: 0,    max: 1.5, step: 0.05, default: 0.55, live: true },
+    { key: 'leafSheen',           label: 'Wax sheen',     min: 0,    max: 1,   step: 0.02, default: 0.4,  live: true },
     { key: 'leafHueShift',        label: 'Hue shift',     min: -0.3, max: 0.3, step: 0.01, default: 0,    live: true, swatch: 'hue' },
     // Manual leaf-color override. When `leafColorOverride` is true, the
     // material color is set directly from `leafColor` (hex), bypassing the
@@ -194,7 +196,6 @@ export const PARAM_SCHEMA = [
     { key: 'leafBackMix',         label: 'Back mix',      min: 0,    max: 1,   step: 0.02, default: 0.35, live: true },
     // --- Advanced (hidden) — diminishing-return polish for hero shots ---
     { key: 'leafIOR',             label: 'IOR',           min: 1.0,  max: 2.0, step: 0.02, default: 1.35, live: true, hidden: true },
-    { key: 'leafNormalStrength',  label: 'Normal',        min: 0,    max: 1.5, step: 0.05, default: 0.25, live: true, hidden: true },
     { key: 'leafBumpScale',       label: 'Vein bump',     min: 0,    max: 0.08,step: 0.002,default: 0.015,live: true, hidden: true },
     { key: 'leafClearcoat',       label: 'Waxy coat',     min: 0,    max: 1,   step: 0.02, default: 0,    live: true, hidden: true },
     { key: 'leafClearcoatRough',  label: 'Coat rough.',   min: 0,    max: 1,   step: 0.02, default: 0.3,  live: true, hidden: true },

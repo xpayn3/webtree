@@ -3050,9 +3050,12 @@ function makeLeafMaterial(props, opts = {}) {
   return m;
 }
 const LEAF_MAT_DEFAULTS = {
-  normalMap: leafNormal, normalScale: new THREE.Vector2(0.25, 0.25),
-  alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.65, metalness: 0,
-  transmission: 0.45, thickness: 0.35, ior: 1.35,
+  // Vein normals visible at canopy distance + waxy cuticle sheen + thinner
+  // SSS so backlit leaves glow against the new backlight key.
+  normalMap: leafNormal, normalScale: new THREE.Vector2(0.55, 0.55),
+  alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.6, metalness: 0,
+  transmission: 0.6, thickness: 0.18, ior: 1.35,
+  sheen: 0.4, sheenRoughness: 0.5, sheenColor: new THREE.Color(0xffffff),
 };
 const leafMatA = makeLeafMaterial({ ...LEAF_MAT_DEFAULTS, map: leafMapA }, { dualColor: true });
 const leafMatB = makeLeafMaterial({ ...LEAF_MAT_DEFAULTS, map: leafMapB }, { dualColor: true });
