@@ -15849,58 +15849,90 @@ const _bootSpecies = (typeof window !== 'undefined' && window.__windyPendingSpec
 window.__windyPendingSpecies = null;
 window.addEventListener('windy:apply-species', (e) => {
   const name = e && e.detail;
-  if (name && SPECIES[name]) applySpecies(name);
+  if (name && SPECIES[name]) {
+    applySpecies(name);
+    // Track recent (welcome card 'Recent' tab reads this).
+    try {
+      const arr = JSON.parse(localStorage.getItem('windy-tree:recent') || '[]');
+      const next = [name, ...arr.filter((n) => n !== name)].slice(0, 8);
+      localStorage.setItem('windy-tree:recent', JSON.stringify(next));
+    } catch (_) {}
+  }
+});
+window.addEventListener('windy:load-preset', (e) => {
+  const name = e && e.detail;
+  if (name && typeof loadPreset === 'function') loadPreset(name);
 });
 // Debug helper: capture thumbnails for a list of species. Resumes the
 // render loop, applies each species, awaits the build, renders a fresh
 // frame, and grabs a square-cropped PNG dataURL. Returns { name: dataURL }.
-window.__captureSpecies = async function (names = ['Oak','Cherry','Birch','Willow','Pine','Baobab'], size = 360, cropFrac = 0.92, settleMs = 5500) {
+window.__captureSpecies = async function (names, size = 420, cropFrac = 0.94, settleMs = 8500) {
+  if (!Array.isArray(names) || !names.length) names = Object.keys(SPECIES);
   const out = {};
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const canvas = renderer.domElement;
-  for (const name of names) {
-    resumeFromPause();
-    await applySpecies(name);
-    // Long settle for foliage worker + LOD pipeline to commit.
-    await sleep(settleMs);
-    resumeFromPause();
+  // Switch to studio cyclorama backdrop for clean preset shots.
+  const prevBackdrop = sceneCfg.backdrop;
+  sceneCfg.backdrop = 'cyclorama';
+  applyBackdrop();
+  const prevPos = camera.position.clone();
+  const prevTgt = controls.target.clone();
+  try {
+    for (const name of names) {
+      resumeFromPause();
+      await applySpecies(name);
+      // Long settle for foliage worker + LOD pipeline to fully commit.
+      await sleep(settleMs);
+      resumeFromPause();
 
-    // Frame the camera to the tree bounds so each species renders at
-    // the same visual scale regardless of trunkHeight / crown size.
-    if (typeof treeMesh !== 'undefined' && treeMesh) {
-      const box = new THREE.Box3().setFromObject(treeMesh);
-      // Foliage instance bounds aren't in treeMesh — pad with leaf inst if present.
-      try {
-        if (typeof leafInstA !== 'undefined' && leafInstA) box.expandByObject(leafInstA);
-      } catch (_) {}
-      if (!box.isEmpty()) {
-        const center = box.getCenter(new THREE.Vector3());
-        const sizeV  = box.getSize(new THREE.Vector3());
-        const radius = Math.max(sizeV.x, sizeV.y, sizeV.z) * 0.55;
-        const fov = camera.fov * Math.PI / 180;
-        const dist = radius / Math.tan(fov / 2) * 1.05;
-        camera.position.set(center.x, center.y + sizeV.y * 0.05, center.z + dist);
-        controls.target.copy(center);
-        camera.updateProjectionMatrix();
-        controls.update();
+      // Frame the tree: frontal, slight low angle (camera below tree centre,
+      // looking up) for a majestic feel.
+      if (typeof treeMesh !== 'undefined' && treeMesh) {
+        const box = new THREE.Box3().setFromObject(treeMesh);
+        try {
+          if (typeof leafInstA !== 'undefined' && leafInstA) box.expandByObject(leafInstA);
+        } catch (_) {}
+        if (!box.isEmpty()) {
+          const center = box.getCenter(new THREE.Vector3());
+          const sizeV  = box.getSize(new THREE.Vector3());
+          const h = Math.max(sizeV.y, sizeV.x, sizeV.z);
+          const fov = camera.fov * Math.PI / 180;
+          const dist = (h * 0.62) / Math.tan(fov / 2) * 1.1;
+          // Camera ~18% up from the base — below the tree's centre so we tilt up.
+          const camY = box.min.y + sizeV.y * 0.18;
+          camera.position.set(center.x, camY, center.z + dist);
+          // Target slightly above mid-height so the crown sits in the upper third.
+          controls.target.set(center.x, center.y + sizeV.y * 0.08, center.z);
+          camera.updateProjectionMatrix();
+          controls.update();
+        }
       }
+
+      await sleep(400);
+      await postProcessing.render();
+      await postProcessing.render();
+      await sleep(120);
+      await postProcessing.render();
+
+      const fullUrl = canvas.toDataURL('image/png');
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = fullUrl; });
+      const sw = img.naturalWidth, sh = img.naturalHeight;
+      const crop = Math.min(sw, sh) * cropFrac;
+      const sx = (sw - crop) / 2;
+      const sy = (sh - crop) / 2;
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      c.getContext('2d').drawImage(img, sx, sy, crop, crop, 0, 0, size, size);
+      out[name] = c.toDataURL('image/png');
     }
-
-    await sleep(250);
-    await postProcessing.render();
-    await postProcessing.render();
-
-    const fullUrl = canvas.toDataURL('image/png');
-    const img = new Image();
-    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = fullUrl; });
-    const sw = img.naturalWidth, sh = img.naturalHeight;
-    const crop = Math.min(sw, sh) * cropFrac;
-    const sx = (sw - crop) / 2;
-    const sy = (sh - crop) / 2;
-    const c = document.createElement('canvas');
-    c.width = size; c.height = size;
-    c.getContext('2d').drawImage(img, sx, sy, crop, crop, 0, 0, size, size);
-    out[name] = c.toDataURL('image/png');
+  } finally {
+    sceneCfg.backdrop = prevBackdrop;
+    applyBackdrop();
+    camera.position.copy(prevPos);
+    controls.target.copy(prevTgt);
+    camera.updateProjectionMatrix();
+    controls.update();
   }
   return out;
 };
@@ -16303,6 +16335,87 @@ function toast(msg, type = 'info', duration = 2400) {
   }, duration);
   el.addEventListener('click', () => { clearTimeout(t); el.classList.add('hiding'); setTimeout(() => el.remove(), 220); });
 }
+
+// --- PWA hooks (paired with the inline bootstrap in index.html) ---------
+// Update toast: the bootstrap detects a waiting service worker and calls
+// windyShowUpdateToast(). We render a sticky toast with a Reload action that
+// posts skipWaiting + reloads on controllerchange.
+window.windyShowUpdateToast = function () {
+  // De-dupe: don't stack multiple update toasts if the SW fires updatefound
+  // more than once during a long session.
+  if (window.__windyUpdateToastShown) return;
+  window.__windyUpdateToastShown = true;
+  const el = document.createElement('div');
+  el.className = 'toast info pwa-update';
+  const text = document.createElement('span');
+  text.textContent = 'New version available.';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = 'Reload';
+  btn.style.cssText = 'margin-left:10px;padding:4px 10px;border-radius:6px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;cursor:pointer;';
+  btn.addEventListener('click', () => {
+    window.__windyReloadOnControllerChange = true;
+    if (typeof window.__windyPendingUpdate === 'function') {
+      window.__windyPendingUpdate();
+    } else {
+      location.reload();
+    }
+  });
+  el.append(text, btn);
+  _toastContainer.appendChild(el);
+};
+
+// File-handler intake: bootstrap stashes the opened .tree.json on
+// window.__windyLaunchPayload. Restore it via the existing JSON loader.
+window.windyConsumeLaunchPayload = function () {
+  const payload = window.__windyLaunchPayload;
+  if (!payload || !payload.text) return;
+  window.__windyLaunchPayload = null;
+  try {
+    // The export format is `{...P, levels, taper, length, profile}`. The
+    // restore path expects {P, taper, length, profile} — wrap accordingly.
+    const raw = JSON.parse(payload.text);
+    const wrapped = (raw && raw.P) ? raw : {
+      P: raw,
+      taper: raw.taper, length: raw.length, profile: raw.profile,
+    };
+    restoreStateJSON(JSON.stringify(wrapped));
+    toast(`Loaded "${payload.name}"`, 'success', 2400);
+  } catch (e) {
+    console.warn('[pwa] launch payload parse failed:', e);
+    toast(`Could not open "${payload.name}"`, 'error', 3200);
+  }
+};
+// If the bootstrap already stashed a payload before main.js was ready,
+// drain it now.
+if (window.__windyLaunchPayload) window.windyConsumeLaunchPayload();
+
+// Request persistent storage so saved presets + thumbnails don't get
+// evicted under storage pressure. Best-effort, prompts only when the
+// browser thinks it's appropriate (PWA installed / engagement signals).
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persisted().then((already) => {
+    if (already) return;
+    navigator.storage.persist().catch(() => {});
+  }).catch(() => {});
+}
+
+// Window-controls-overlay support: when the PWA's title bar is overlaid by
+// the OS controls (Chromium desktop), publish the safe-area inset width as
+// a CSS var so the toolbar can dodge the close/minimize buttons.
+(function () {
+  const wco = navigator.windowControlsOverlay;
+  if (!wco) return;
+  const apply = () => {
+    const r = wco.getTitlebarAreaRect();
+    document.documentElement.style.setProperty('--wco-h', `${r.height}px`);
+    document.documentElement.style.setProperty('--wco-x', `${r.x}px`);
+    document.documentElement.style.setProperty('--wco-w', `${r.width}px`);
+    document.documentElement.classList.toggle('pwa-wco', wco.visible);
+  };
+  apply();
+  wco.addEventListener('geometrychange', apply);
+})();
 
 // --- Scrub value tooltip ------------------------------------------------
 // Plain instant text swap on value change. Earlier revisions did a

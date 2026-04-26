@@ -1,0 +1,42 @@
+{
+  "name": "Windy Tree",
+  "short_name": "Windy Tree",
+  "description": "Real-time procedural tree generator on WebGPU + Three.js. Sculpt branches, swap species, tune wind, and export your tree.",
+  "start_url": "./",
+  "scope": "./",
+  "id": "/windy-tree/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "lang": "en",
+  "dir": "ltr",
+  "theme_color": "#0a0e0f",
+  "background_color": "#0a0e0f",
+  "categories": ["graphics", "design", "utilities"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/json": [".tree.json", ".json"]
+      },
+      "launch_type": "single-client"
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 480
+  }
+}

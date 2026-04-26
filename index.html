@@ -13,6 +13,8 @@
   <meta name="twitter:title" content="Windy Tree — WebGPU procedural trees" />
   <meta name="twitter:description" content="Real-time procedural tree generator on WebGPU + Three.js. Sculpt, simulate, export." />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237fbf6a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z'/><path d='M2 21c0-3 1.85-5.36 5.08-6'/></svg>" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <title>WebGPU · Windy Tree</title>
   <link rel="stylesheet" href="style.css" />
   <script type="importmap">
@@ -176,81 +178,353 @@
       <button class="intro-close" type="button" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
-      <div class="intro-hero">
+      <header class="intro-header">
         <div class="intro-eyebrow">WebGPU · Three.js</div>
         <h2 id="intro-title" class="intro-title">Windy Tree</h2>
         <p class="intro-body">A real-time procedural tree generator. Sculpt branches, swap species, tune wind &amp; light, then export your tree.</p>
+      </header>
+
+      <div class="intro-layout">
+        <nav class="intro-tabs" role="tablist" aria-label="Tree categories">
+          <button class="intro-tab active" type="button" role="tab" data-tab="broadleaf">
+            <svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg>
+            <span>Broadleaf</span>
+          </button>
+          <button class="intro-tab" type="button" role="tab" data-tab="conifer">
+            <svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 L4 12 L8 12 L4 18 L9 18 L5 22 L19 22 L15 18 L20 18 L16 12 L20 12 Z"/></svg>
+            <span>Conifer</span>
+          </button>
+          <button class="intro-tab" type="button" role="tab" data-tab="bush">
+            <svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17q-3 0-3-3 0-2 2-2.5 0-2 2-2.5 1-3 4-3 3 0 4 3 2 .5 2 2.5 0 3-3 3z"/><path d="M9 17v4M15 17v4"/></svg>
+            <span>Bush</span>
+          </button>
+          <div class="intro-tab-sep"></div>
+          <button class="intro-tab" type="button" role="tab" data-tab="library">
+            <svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span>Library</span>
+          </button>
+          <button class="intro-tab" type="button" role="tab" data-tab="recent">
+            <svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            <span>Recent</span>
+          </button>
+          <div class="intro-tab-sep"></div>
+          <button class="intro-tab" type="button" role="tab" data-tab="info">
+            <svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.8" fill="currentColor"/></svg>
+            <span>Info</span>
+          </button>
+        </nav>
+
+        <div class="intro-content">
+          <div class="intro-pane" data-pane="species"></div>
+          <div class="intro-pane" data-pane="library" hidden></div>
+          <div class="intro-pane" data-pane="recent" hidden></div>
+          <div class="intro-pane" data-pane="info" hidden></div>
+        </div>
       </div>
 
-      <div class="intro-section-label">Pick a tree to start</div>
-      <div class="intro-presets">
-        <button class="preset-card" type="button" data-species="Oak">
-          <span class="preset-art"><img src="presets/oak.png" alt="" loading="lazy"/></span>
-          <span class="preset-name">Oak</span>
-          <span class="preset-tag">Spreading scaffolds</span>
-        </button>
-        <button class="preset-card" type="button" data-species="Cherry">
-          <span class="preset-art"><img src="presets/cherry.png" alt="" loading="lazy"/></span>
-          <span class="preset-name">Cherry</span>
-          <span class="preset-tag">Pink blossom crown</span>
-        </button>
-        <button class="preset-card" type="button" data-species="Birch">
-          <span class="preset-art"><img src="presets/birch.png" alt="" loading="lazy"/></span>
-          <span class="preset-name">Birch</span>
-          <span class="preset-tag">Slender white bark</span>
-        </button>
-        <button class="preset-card" type="button" data-species="Willow">
-          <span class="preset-art"><img src="presets/willow.png" alt="" loading="lazy"/></span>
-          <span class="preset-name">Willow</span>
-          <span class="preset-tag">Cascading fronds</span>
-        </button>
-        <button class="preset-card" type="button" data-species="Pine">
-          <span class="preset-art"><img src="presets/pine.png" alt="" loading="lazy"/></span>
-          <span class="preset-name">Pine</span>
-          <span class="preset-tag">Tall conifer</span>
-        </button>
-        <button class="preset-card" type="button" data-species="Baobab">
-          <span class="preset-art"><img src="presets/baobab.png" alt="" loading="lazy"/></span>
-          <span class="preset-name">Baobab</span>
-          <span class="preset-tag">Bulbous trunk</span>
-        </button>
-      </div>
-
-      <div class="intro-footer">
+      <footer class="intro-footer">
         <ul class="intro-tips">
           <li><b>Drag</b> orbit · <b>scroll</b> zoom</li>
           <li><b>Right-drag</b> a branch to bend it</li>
           <li><b>?</b> for full controls</li>
         </ul>
         <button class="intro-cta" type="button">Skip — keep current tree</button>
-      </div>
+      </footer>
     </div>
   </div>
   <script>
     (function () {
-      var KEY = 'windy-tree:intro-dismissed:v1';
       var card = document.getElementById('intro-card');
       if (!card) return;
-      try { if (localStorage.getItem(KEY) === '1') return; } catch (e) {}
       card.hidden = false;
+
+      // Species catalogue with category + tagline. Keep in sync with schema.js SPECIES.
+      var CATALOG = {
+        broadleaf: [
+          { n: 'Oak',            tag: 'Spreading scaffolds' },
+          { n: 'Maple',          tag: 'Dense lollipop crown' },
+          { n: 'Cherry',         tag: 'Pink blossom crown' },
+          { n: 'Willow',         tag: 'Cascading fronds' },
+          { n: 'Birch',          tag: 'Slender white bark' },
+          { n: 'Acacia',         tag: 'Flat umbrella crown' },
+          { n: 'Olive',          tag: 'Twisted ancient bole' },
+          { n: 'Baobab',         tag: 'Bulbous African giant' },
+          { n: 'Palm',           tag: 'Tropical fronds' },
+          { n: 'Aspen',          tag: 'Quivering leaves' },
+          { n: 'Tupelo',         tag: 'Pyramidal swamp tree' },
+          { n: 'Sassafras',      tag: 'Layered horizontal limbs' },
+          { n: 'Lime',           tag: 'Heart-shaped leaves' },
+          { n: 'Beech',          tag: 'Smooth grey bark' },
+          { n: 'PlaneTree',      tag: 'London plane', label: 'Plane Tree' },
+          { n: 'Ginkgo',         tag: 'Ancient fan leaves' },
+          { n: 'LombardyPoplar', tag: 'Tall narrow column', label: 'Lombardy Poplar' },
+          { n: 'JapaneseMaple',  tag: 'Lacy red foliage', label: 'Japanese Maple' },
+          { n: 'Eucalyptus',     tag: 'Aromatic blue-grey' },
+        ],
+        conifer: [
+          { n: 'Pine',      tag: 'Classic conifer' },
+          { n: 'Spruce',    tag: 'Christmas tree shape' },
+          { n: 'Cedar',     tag: 'Spreading layered tiers' },
+          { n: 'Cypress',   tag: 'Tall narrow column' },
+          { n: 'Fir',       tag: 'Symmetric pyramidal' },
+          { n: 'Larch',     tag: 'Deciduous conifer' },
+          { n: 'ScotsPine', tag: 'Open scaffolded crown', label: 'Scots Pine' },
+          { n: 'Hemlock',   tag: 'Drooping leader' },
+          { n: 'Juniper',   tag: 'Twisted shrubby form' },
+          { n: 'Redwood',   tag: 'Towering giant' },
+          { n: 'Araucaria', tag: 'Monkey puzzle tree' },
+        ],
+        bush: [
+          { n: 'Boxwood',   tag: 'Dense topiary' },
+          { n: 'Lavender',  tag: 'Aromatic purple spikes' },
+          { n: 'Hydrangea', tag: 'Big mophead clusters' },
+          { n: 'Rosemary',  tag: 'Woody herb' },
+          { n: 'Holly',     tag: 'Glossy spiny leaves' },
+        ],
+      };
+
+      function fmtName(s) { return s.label || s.n; }
+      function imgFor(name) { return 'presets/' + name.toLowerCase() + '.png'; }
+
+      function renderSpeciesGrid(category) {
+        var list = CATALOG[category] || [];
+        var html = '<div class="preset-grid">';
+        list.forEach(function (s) {
+          html += '<button class="preset-card" type="button" data-species="' + s.n + '">' +
+                  '<span class="preset-art"><img src="' + imgFor(s.n) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"/></span>' +
+                  '<span class="preset-name">' + fmtName(s) + '</span>' +
+                  '<span class="preset-tag">' + s.tag + '</span>' +
+                  '</button>';
+        });
+        html += '</div>';
+        return html;
+      }
+
+      function renderLibrary() {
+        var presets = {};
+        try { presets = JSON.parse(localStorage.getItem('webgpu-tree:presets') || '{}'); } catch (e) {}
+        var keys = Object.keys(presets);
+        if (!keys.length) {
+          return '<div class="intro-empty">' +
+                 '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>' +
+                 '<h3>No saved trees yet</h3>' +
+                 '<p>Use the <b>Save</b> panel in the sidebar to store your custom trees with thumbnails. They will appear here.</p>' +
+                 '</div>';
+        }
+        var html = '<div class="preset-grid">';
+        keys.forEach(function (name) {
+          var p = presets[name];
+          var thumb = p && p._thumb ? p._thumb : '';
+          html += '<button class="preset-card library" type="button" data-saved="' + encodeURIComponent(name) + '">' +
+                  '<span class="preset-art">' + (thumb ? '<img src="' + thumb + '" alt=""/>' : '<span class="art-fallback">…</span>') + '</span>' +
+                  '<span class="preset-name">' + name.replace(/</g,'&lt;') + '</span>' +
+                  '<span class="preset-tag">Saved preset</span>' +
+                  '</button>';
+        });
+        html += '</div>';
+        return html;
+      }
+
+      function renderRecent() {
+        var recent = [];
+        try { recent = JSON.parse(localStorage.getItem('windy-tree:recent') || '[]'); } catch (e) {}
+        if (!recent.length) {
+          return '<div class="intro-empty">' +
+                 '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>' +
+                 '<h3>No recent trees</h3>' +
+                 '<p>Species you pick will show up here for quick access on your next visit.</p>' +
+                 '</div>';
+        }
+        // Map names back to catalog entries
+        var lookup = {};
+        Object.keys(CATALOG).forEach(function (cat) {
+          CATALOG[cat].forEach(function (s) { lookup[s.n] = s; });
+        });
+        var html = '<div class="preset-grid">';
+        recent.forEach(function (n) {
+          var s = lookup[n] || { n: n, tag: 'Recent' };
+          html += '<button class="preset-card" type="button" data-species="' + s.n + '">' +
+                  '<span class="preset-art"><img src="' + imgFor(s.n) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"/></span>' +
+                  '<span class="preset-name">' + fmtName(s) + '</span>' +
+                  '<span class="preset-tag">' + s.tag + '</span>' +
+                  '</button>';
+        });
+        html += '</div>';
+        return html;
+      }
+
+      function renderInfo() {
+        return '\
+<div class="info-grid">\
+  <section class="info-section info-hero-card">\
+    <div class="info-hero-text">\
+      <span class="info-eyebrow">Built on WebGPU</span>\
+      <h3>Design a tree, bend it in the wind.</h3>\
+      <p>Pick a species, shape geometry live with sliders, and sculpt branches with real-time physics &amp; wind. Everything renders on the GPU — editing is instant.</p>\
+    </div>\
+    <div class="info-hero-art" aria-hidden="true">\
+      <img src="presets/oak.png" alt=""/>\
+      <img src="presets/cherry.png" alt=""/>\
+      <img src="presets/pine.png" alt=""/>\
+    </div>\
+  </section>\
+\
+  <section class="info-section">\
+    <h4><span class="info-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></span> Start in 3 steps</h4>\
+    <ol class="info-steps">\
+      <li><b>Pick a species.</b> Choose a Broadleaf, Conifer or Bush from the tabs. Or stay on Custom and build your own.</li>\
+      <li><b>Shape it.</b> Drag any slider in the sidebar — Shape, Branching, Foliage, Bark, Scene — the tree rebuilds as you drag.</li>\
+      <li><b>Iterate.</b> Press <kbd>R</kbd> for a new seed, toggle Wind &amp; Physics, right-drag a branch to bend it. Save a preset slot when you like the result.</li>\
+    </ol>\
+  </section>\
+\
+  <section class="info-section">\
+    <h4><span class="info-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg></span> Canvas controls</h4>\
+    <div class="info-mouse">\
+      <div><span class="kbd">L-drag</span> Orbit camera</div>\
+      <div><span class="kbd">R-drag</span> Bend nearest branch</div>\
+      <div><span class="kbd">Wheel</span> Zoom</div>\
+      <div><span class="kbd">Hover</span> Halo on grab points</div>\
+    </div>\
+  </section>\
+\
+  <section class="info-section">\
+    <h4><span class="info-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg></span> Shortcuts</h4>\
+    <div class="info-kbd-grid">\
+      <div><span>Regenerate</span><span class="kbd">R</span></div>\
+      <div><span>Wireframe</span><span class="kbd">W</span></div>\
+      <div><span>Leaves</span><span class="kbd">L</span></div>\
+      <div><span>Physics</span><span class="kbd">P</span></div>\
+      <div><span>Theme</span><span class="kbd">T</span></div>\
+      <div><span>Screenshot</span><span class="kbd">⇧</span><span class="kbd">P</span></div>\
+      <div><span>Command palette</span><span class="kbd">Ctrl</span><span class="kbd">K</span></div>\
+      <div><span>Undo</span><span class="kbd">Ctrl</span><span class="kbd">Z</span></div>\
+    </div>\
+  </section>\
+</div>';
+      }
+
+      function showTab(tab) {
+        // Activate tab button
+        card.querySelectorAll('.intro-tab').forEach(function (t) {
+          t.classList.toggle('active', t.getAttribute('data-tab') === tab);
+        });
+        // Map category tabs to species pane; library/recent/info have own panes
+        var paneMap = { broadleaf: 'species', conifer: 'species', bush: 'species', library: 'library', recent: 'recent', info: 'info' };
+        var paneKey = paneMap[tab];
+        card.querySelectorAll('.intro-pane').forEach(function (p) {
+          p.hidden = p.getAttribute('data-pane') !== paneKey;
+        });
+        var pane = card.querySelector('.intro-pane[data-pane="' + paneKey + '"]');
+        if (paneKey === 'species') pane.innerHTML = renderSpeciesGrid(tab);
+        else if (paneKey === 'library') pane.innerHTML = renderLibrary();
+        else if (paneKey === 'recent') pane.innerHTML = renderRecent();
+        else if (paneKey === 'info') pane.innerHTML = renderInfo();
+
+        // Wire preset cards in the new pane
+        pane.querySelectorAll('.preset-card[data-species]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var name = btn.getAttribute('data-species');
+            window.__windyPendingSpecies = name;
+            window.dispatchEvent(new CustomEvent('windy:apply-species', { detail: name }));
+            close();
+          });
+        });
+        pane.querySelectorAll('.preset-card[data-saved]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var name = decodeURIComponent(btn.getAttribute('data-saved'));
+            window.__windyPendingPresetLoad = name;
+            window.dispatchEvent(new CustomEvent('windy:load-preset', { detail: name }));
+            close();
+          });
+        });
+      }
+
       function close() {
         card.classList.add('hide');
-        try { localStorage.setItem(KEY, '1'); } catch (e) {}
         setTimeout(function () { card.remove(); }, 250);
       }
+
       card.querySelector('.intro-close').addEventListener('click', close);
       card.querySelector('.intro-cta').addEventListener('click', close);
       card.addEventListener('click', function (e) { if (e.target === card) close(); });
-      card.querySelectorAll('.preset-card').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var name = btn.getAttribute('data-species');
-          window.__windyPendingSpecies = name;
-          window.dispatchEvent(new CustomEvent('windy:apply-species', { detail: name }));
-          close();
-        });
+      card.querySelectorAll('.intro-tab').forEach(function (t) {
+        t.addEventListener('click', function () { showTab(t.getAttribute('data-tab')); });
       });
+
+      // Default: broadleaf
+      showTab('broadleaf');
     })();
   </script>
-  <script type="module" src="main.js?v=r18"></script>
+  <script type="module" src="main.js?v=r19"></script>
+  <script>
+    // PWA bootstrap: service-worker registration + update toast + file-handler
+    // launchQueue intake. Kept inline so it runs even on a cold cache.
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      // file:// and the like — SW would error.
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('service-worker.js').then(function (reg) {
+          // Detect a waiting worker (= update available) and offer reload.
+          function offerUpdate(worker) {
+            if (!worker) return;
+            // Park a callback so main.js's toast() can pick it up once ready.
+            window.__windyPendingUpdate = function () {
+              worker.postMessage('skipWaiting');
+            };
+            // controllerchange fires when the new SW activates after skipWaiting.
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+              if (window.__windyReloadOnControllerChange) location.reload();
+            });
+            if (typeof window.windyShowUpdateToast === 'function') {
+              window.windyShowUpdateToast();
+            } else {
+              // main.js wires windyShowUpdateToast at boot — wait for it briefly.
+              var tries = 0;
+              var iv = setInterval(function () {
+                if (typeof window.windyShowUpdateToast === 'function' || ++tries > 40) {
+                  clearInterval(iv);
+                  if (typeof window.windyShowUpdateToast === 'function') window.windyShowUpdateToast();
+                }
+              }, 250);
+            }
+          }
+          if (reg.waiting) offerUpdate(reg.waiting);
+          reg.addEventListener('updatefound', function () {
+            var w = reg.installing;
+            if (!w) return;
+            w.addEventListener('statechange', function () {
+              if (w.state === 'installed' && navigator.serviceWorker.controller) {
+                offerUpdate(w);
+              }
+            });
+          });
+          // Re-check for updates every 30 min so long-running sessions get prompted.
+          setInterval(function () { reg.update().catch(function () {}); }, 30 * 60 * 1000);
+        }).catch(function (err) {
+          console.warn('[pwa] SW registration failed:', err);
+        });
+      });
+
+      // File-handler launchQueue: when the OS hands us a .tree.json file
+      // (double-click in Finder/Explorer), read it and stash for main.js.
+      if ('launchQueue' in window) {
+        window.launchQueue.setConsumer(async function (params) {
+          if (!params.files || !params.files.length) return;
+          try {
+            var file = await params.files[0].getFile();
+            var text = await file.text();
+            window.__windyLaunchPayload = { name: file.name, text: text };
+            if (typeof window.windyConsumeLaunchPayload === 'function') {
+              window.windyConsumeLaunchPayload();
+            }
+          } catch (e) {
+            console.warn('[pwa] launchQueue failed:', e);
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
