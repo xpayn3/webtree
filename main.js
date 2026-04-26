@@ -2692,6 +2692,75 @@ const barkNormal = (() => {
   barkNormal.needsUpdate = true;
 }
 
+// Slim albedo-only renderer for the style picker thumbnails. Uses the
+// preset recipe defaults (no P slider overrides) so each thumbnail always
+// shows the canonical look of that preset, regardless of the user's
+// current edits. Cached forever — recipes never change at runtime.
+const _BARK_THUMB_CACHE = new Map();
+function generateBarkThumbnail(style, size = 48) {
+  const key = style + ':' + size;
+  const cached = _BARK_THUMB_CACHE.get(key);
+  if (cached) return cached;
+  const recipe = BARK_STYLES[style] || BARK_STYLES.oak;
+  const N = size;
+  const seed = 1;
+  const noiseLarge = _makeTilableNoise(seed, 8);
+  const noiseMid   = _makeTilableNoise(seed + 7, 16);
+  const noiseFine  = _makeTilableNoise(seed + 13, 64);
+  const noiseGrain = _makeTilableNoise(seed + 23, 128);
+  const cv = document.createElement('canvas');
+  cv.width = N; cv.height = N;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(N, N);
+  const data = img.data;
+  const pal = recipe.palette;
+  const grainAmp = recipe.grain || 0;
+  for (let y = 0; y < N; y++) {
+    const v = y / N;
+    for (let x = 0; x < N; x++) {
+      const u = x / N;
+      let h = 0.5;
+      if (recipe.vertFreq > 0 && recipe.vertDepth > 0) {
+        const wobble = (noiseMid(u * 4, v * 8) - 0.5) * recipe.vertWobble;
+        const fissure = Math.sin((u + wobble) * Math.PI * 2 * recipe.vertFreq);
+        h -= Math.pow(Math.max(0, 1 - Math.abs(fissure)), recipe.vertSharp) * recipe.vertDepth;
+      }
+      if (recipe.horizFreq > 0 && recipe.horizAmp > 0) {
+        const wobble = (noiseMid(u * 6, v * 4) - 0.5) * 0.04;
+        const band = Math.sin((v + wobble) * Math.PI * 2 * recipe.horizFreq);
+        h += (Math.pow(Math.max(0, 1 - Math.abs(band)), recipe.horizSharp) - 0.5) * recipe.horizAmp;
+      }
+      if (recipe.largeAmp > 0) h += (noiseLarge(u * recipe.largeFreq, v * recipe.largeFreq) - 0.5) * recipe.largeAmp;
+      if (recipe.microAmp > 0) h += (noiseFine(u * recipe.microFreq, v * recipe.microFreq) - 0.5) * recipe.microAmp;
+      h = Math.max(0, Math.min(1, h));
+      let r, g, b;
+      if (h < 0.5) {
+        const t = h * 2;
+        r = pal[0][0] * (1 - t) + pal[1][0] * t;
+        g = pal[0][1] * (1 - t) + pal[1][1] * t;
+        b = pal[0][2] * (1 - t) + pal[1][2] * t;
+      } else {
+        const t = (h - 0.5) * 2;
+        r = pal[1][0] * (1 - t) + pal[2][0] * t;
+        g = pal[1][1] * (1 - t) + pal[2][1] * t;
+        b = pal[1][2] * (1 - t) + pal[2][2] * t;
+      }
+      if (grainAmp > 0) {
+        const gr = (noiseGrain(x / N, y / N) - 0.5) * grainAmp * 2;
+        r += gr; g += gr; b += gr;
+      }
+      const o = (y * N + x) * 4;
+      data[o    ] = r < 0 ? 0 : r > 255 ? 255 : r;
+      data[o + 1] = g < 0 ? 0 : g > 255 ? 255 : g;
+      data[o + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+      data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  _BARK_THUMB_CACHE.set(key, cv);
+  return cv;
+}
+
 // --- Wind (TSL vertex displacement) --------------------------------------
 // Two independent enables. Leaves can keep swaying via the shader even when
 // the bark is being driven by the CPU skeleton sim (during a grab interaction
@@ -3390,14 +3459,7 @@ function applyLeafShape() {
   const base = P.leafProfile;
   // Presets carry their own silhouette polygon; Custom uses the user's
   // sculpted P.leafProfile.silhouette directly.
-  // Bake the procedural blade in near-white instead of the default green
-  // so the material's seasonal tint (m.color) dominates after the texture
-  // multiply. Without this, a pink/orange material color × green texture
-  // collapses to muddy olive — i.e. autumn/blossom species can't show their
-  // tint. Custom profile may still override via `color` / `veinColor`.
   const profile = shape === 'Custom' ? base : { ...base, ...LEAF_PRESETS[shape] };
-  if (!profile.color)     profile.color     = '#e6e6e6';
-  if (!profile.veinColor) profile.veinColor = '#7a7a7a';
   _ensureProceduralLeafTex(256);
   drawLeafToCanvas(_proceduralLeafCanvas.getContext('2d'), profile, 256);
   drawLeafBumpToCanvas(_proceduralLeafBumpCanvas.getContext('2d'), profile, 256);
@@ -8083,6 +8145,7 @@ function fmt(v, step) {
 }
 function createSliderRow(p, getter, setter, onAfter, opts) {
   if (p.type === 'select') return createSelectRow(p, getter, setter, onAfter);
+  if (p.type === 'thumbnails') return createThumbnailRow(p, getter, setter, onAfter);
   opts = opts || {};
   // noRegen: skip beginScrub/endScrub (which queues a full tree rebuild on
   // drag end) — for sliders that don't affect the tree (brush popover etc.)
@@ -8374,6 +8437,59 @@ function createSelectRow(p, getter, setter, onAfter) {
   });
   row.append(name, select);
   return row;
+}
+
+// Thumbnail-grid picker. Used by `barkStyle` — renders each preset as a
+// 48² procedurally-generated bark texture with a label below. Cheaper than
+// a Photoshop colour picker but does the same job: communicate the
+// destination of the click before the click. Active option gets an accent
+// ring + a subtle scale; hover lifts; press scales down for feedback.
+function createThumbnailRow(p, getter, setter, onAfter) {
+  const wrap = document.createElement('div');
+  wrap.className = 'thumbnail-row';
+  const grid = document.createElement('div');
+  grid.className = 'thumbnail-grid';
+  const items = new Map();
+  let active = getter() ?? p.default;
+
+  const setActive = (v) => {
+    active = v;
+    for (const [k, btn] of items) btn.classList.toggle('active', k === v);
+  };
+
+  for (const opt of p.options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'thumbnail';
+    btn.dataset.value = opt;
+    if (opt === active) btn.classList.add('active');
+    // Render the thumbnail synchronously — at 48² it costs <2ms per preset
+    // and the cache hits forever after.
+    let canvas = null;
+    try { canvas = generateBarkThumbnail(opt, 48); } catch {}
+    if (canvas) {
+      canvas.classList.add('thumbnail-canvas');
+      btn.appendChild(canvas);
+    }
+    const label = document.createElement('span');
+    label.className = 'thumbnail-label';
+    label.textContent = opt;
+    btn.appendChild(label);
+    btn.addEventListener('click', () => {
+      if (active === opt) return;  // no-op clicks don't push history
+      setActive(opt);
+      setter(opt);
+      if (onAfter) { onAfter(opt); commitHistorySoon(); } else debouncedGenerate();
+    });
+    items.set(opt, btn);
+    grid.appendChild(btn);
+  }
+  wrap.appendChild(grid);
+  // Expose a setter so syncUI / preset-load paths can update the active
+  // state when something else (e.g. species apply) changes the value.
+  wrap.dataset.pkey = p.key;
+  wrap._applyValue = setActive;
+  return wrap;
 }
 
 function makeSegmented(options, activeValue, onChange) {
@@ -11661,6 +11777,13 @@ function syncUI() {
       el._applyValue(P[key]);
     }
   }
+  // Thumbnail-grid rows track their value via a wrapper, not a scrubber.
+  for (const el of sidebarBody.querySelectorAll('.thumbnail-row[data-pkey]')) {
+    const key = el.dataset.pkey;
+    if (P[key] !== undefined && typeof el._applyValue === 'function') {
+      el._applyValue(P[key]);
+    }
+  }
 }
 
 // Regenerate handled via the toolbar button (tb-regen).
@@ -11698,6 +11821,12 @@ function applySpecies(name) {
   // the user's chosen leaf shape (preset / Custom / Upload) persists across
   // species and tree-type switches. `applyLeafShape()` below re-applies it
   // to the new material.
+  // Clear any per-species leafProfile colour overrides from a previous spec
+  // so the next species falls back to the default green unless it sets them.
+  if (P.leafProfile) {
+    P.leafProfile.color = undefined;
+    P.leafProfile.veinColor = undefined;
+  }
   if (taperSpline)   taperSpline.setPoints([1, 1, 1, 1, 1]);
   if (lengthSpline)  lengthSpline.setPoints([1, 1, 1, 1, 1]);
   if (profileEditor) profileEditor.setPoints(new Array(12).fill(1));
@@ -11705,8 +11834,12 @@ function applySpecies(name) {
     // Route spec.type → P.treeType (the schema stores the type under a
     // different key, so a plain `k in P` copy would silently drop it).
     if (spec.type) P.treeType = spec.type;
+    // Per-species leaf Fill / Vein colour — flat keys on the spec routed
+    // into P.leafProfile (which isn't itself a schema key).
+    if (spec.leafFillColor && P.leafProfile) P.leafProfile.color     = spec.leafFillColor;
+    if (spec.leafVeinColor && P.leafProfile) P.leafProfile.veinColor = spec.leafVeinColor;
     for (const k of Object.keys(spec)) {
-      if (k === 'levels' || k === 'type') continue;
+      if (k === 'levels' || k === 'type' || k === 'leafFillColor' || k === 'leafVeinColor') continue;
       if (k in P) P[k] = spec[k];
     }
     if (Array.isArray(spec.levels)) P.levels = spec.levels.map((l) => ({ ...makeDefaultLevel(), ...l }));

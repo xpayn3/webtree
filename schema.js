@@ -100,7 +100,7 @@ export const PARAM_SCHEMA = [
   // for readability.
   { group: 'Bark', params: [
     // ── Style ──
-    { key: 'barkStyle', label: 'Preset', type: 'select',
+    { key: 'barkStyle', label: 'Preset', type: 'thumbnails',
       options: ['oak', 'pine', 'birch', 'cherry', 'smooth', 'eucalyptus', 'palm', 'redwood'], default: 'oak', live: true },
     { key: 'barkSeed', label: 'Variation seed', min: 1, max: 50, step: 1, default: 1, live: true },
     // ── Fissures (vertical layer) ──
@@ -404,6 +404,7 @@ export const SPECIES = {
     leavesPerTip: 28, leafChainSteps: 9, leavesStart: 0.05, season: 0.45,
     leafClusterSize: 3, leafClusterSpread: 0.6, leafMaxRadius: 0.18,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#5a7c38', leafVeinColor: '#3a5a22',
     gravityStrength: 0.55, gravityStiffness: 0.55,
     // Crown shape comes from densityPoints / lengthPoints / apicalDominance
     // ramps — hard ellipsoid envelope was clipping mid-arc against L1 angle 1.25
@@ -433,6 +434,7 @@ export const SPECIES = {
     leavesPerTip: 26, leafChainSteps: 9, leavesStart: 0.05, season: 0.78,
     leafClusterSize: 3, leafClusterSpread: 0.6, leafMaxRadius: 0.14,
     leafPhyllotaxis: 'opposite',
+    leafFillColor: '#6e8e3e', leafVeinColor: '#3a5a22',
     gravityStrength: 0.25, gravityStiffness: 1.0,
     // Decussate cage shapes itself — ellipsoid envelope was reading as a
     // clipped sphere instead of the natural Maple silhouette.
@@ -468,7 +470,7 @@ export const SPECIES = {
     leavesPerTip: 28, leafChainSteps: 9, leavesStart: 0, season: 0.05,
     leafClusterSize: 5, leafClusterSpread: 0.75,
     leafPhyllotaxis: 'alternate',
-    leafColorOverride: true, leafColor: '#ffb7d5', leafColorVar: 0.08,
+    leafFillColor: '#ffc8dc', leafVeinColor: '#d98aaa', leafColorVar: 0.08,
     pruneMode: 'off',
     levels: [
       // L1 — primary scaffold. Six primaries fan outward from the trunk apex
@@ -496,6 +498,7 @@ export const SPECIES = {
     leafSize: 0.2, leafDroop: 0.95, leafFacing: 0.3, leafStemLen: 0, leafStemAngle: 0.25, leafSpread: 0.4,
     leavesPerTip: 20, leafChainSteps: 12, leavesStart: 0.1,
     leafMaxRadius: 0.05, leafPhyllotaxis: 'alternate',
+    leafFillColor: '#9ab458', leafVeinColor: '#6e8a3a',
     leafClusterSize: 3, leafClusterSpread: 0.3,
     pruneMode: 'off', season: 0.35,
     // Real willow droops at the joint, not uniformly along each whip.
@@ -529,6 +532,7 @@ export const SPECIES = {
     leavesPerTip: 14, leafChainSteps: 6, leavesStart: 0.1, season: 0.25,
     leafClusterSize: 3, leafClusterSpread: 0.55,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#7da645', leafVeinColor: '#4a6a28',
     pruneMode: 'off',
     levels: [
       // Birch: slender trunk, scaffold arcs up, drooping whippy tips.
