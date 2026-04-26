@@ -2466,6 +2466,64 @@ const BARK_STYLES = {
     normalStrength: 4.5,
     grain: 5,
   },
+  // Plane / sycamore — iconic camouflage. Smooth surface broken by big
+  // irregular patches of olive, cream, and grey-green where the outer
+  // bark sloughs off. Almost no relief; the look is all colour.
+  plane: {
+    vertFreq: 0.6, vertSharp: 1.2, vertWobble: 0.30, vertDepth: 0.08,
+    horizFreq: 0, horizSharp: 0, horizAmp: 0,
+    largeFreq: 0.9, largeAmp: 0.62,
+    microFreq: 18, microAmp: 0.04,
+    palette: [[110, 108, 88], [185, 180, 158], [228, 222, 200]],
+    normalStrength: 0.7,
+    grain: 4,
+  },
+  // Mediterranean olive — heavily gnarled, twisted ropy texture, deep
+  // irregular fissures. Cool grey-green palette. Old olives have an
+  // almost driftwood look — busy micro detail without sharp ridges.
+  olive: {
+    vertFreq: 4,  vertSharp: 5, vertWobble: 0.28, vertDepth: 0.55,
+    horizFreq: 1.5, horizSharp: 4, horizAmp: 0.20,
+    largeFreq: 1.4, largeAmp: 0.42,
+    microFreq: 28, microAmp: 0.08,
+    palette: [[70, 70, 60], [128, 128, 110], [186, 186, 168]],
+    normalStrength: 3.8,
+    grain: 7,
+  },
+  // Maple (Acer) — finely fissured pewter-grey. Tighter and more uniform
+  // than oak's deep plates; reads as ridged but not gnarled.
+  maple: {
+    vertFreq: 5,  vertSharp: 6, vertWobble: 0.06, vertDepth: 0.42,
+    horizFreq: 2,  horizSharp: 6, horizAmp: 0.10,
+    largeFreq: 1.2, largeAmp: 0.20,
+    microFreq: 32, microAmp: 0.06,
+    palette: [[55, 50, 48], [110, 104, 100], [170, 165, 160]],
+    normalStrength: 3.4,
+    grain: 6,
+  },
+  // Beech / hornbeam — silken near-mirror grey with very subtle
+  // horizontal lenticel rings + faint mottling. Almost no relief, more
+  // texture than 'smooth' so the trunk doesn't read as plastic.
+  beech: {
+    vertFreq: 0.4, vertSharp: 0.8, vertWobble: 0.20, vertDepth: 0.06,
+    horizFreq: 14, horizSharp: 4, horizAmp: 0.12,
+    largeFreq: 1.6, largeAmp: 0.18,
+    microFreq: 22, microAmp: 0.04,
+    palette: [[80, 78, 74], [148, 146, 142], [212, 210, 206]],
+    normalStrength: 1.0,
+    grain: 4,
+  },
+  // Cedar / cypress — long stringy peeling vertical strips, soft dark
+  // reddish-brown. Less aggressive than redwood, more papery feel.
+  cedar: {
+    vertFreq: 9,  vertSharp: 5, vertWobble: 0.10, vertDepth: 0.32,
+    horizFreq: 1, horizSharp: 2, horizAmp: 0.10,
+    largeFreq: 1.0, largeAmp: 0.24,
+    microFreq: 26, microAmp: 0.06,
+    palette: [[78, 50, 36], [148, 100, 70], [205, 162, 122]],
+    normalStrength: 2.6,
+    grain: 6,
+  },
 };
 
 // Periodic value-noise factory. Returns `(u, v) → [0, 1]`. Tiles exactly

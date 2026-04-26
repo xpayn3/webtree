@@ -429,7 +429,7 @@ export const SPECIES = {
     // ramifying densely toward a packed outer shell. Opposite/decussate
     // phyllotaxis (Acer genus). 4 orders, heavy ramification, gravity sag
     // for the slight tip droop real maples carry under leaf weight.
-    type: 'broadleaf', barkStyle: 'oak',
+    type: 'broadleaf', barkStyle: 'maple',
     trunkHeight: 9, tipRadius: 0.005, rootFlare: 0.45,
     trunkJitter: 0.06,
     globalScale: 1.0,
@@ -494,7 +494,7 @@ export const SPECIES = {
     // phyllotaxis but we keep the leaves slightly scattered so the drooping
     // whips don't read like a rigid helix. trunkHeight lifted 7 → 8 so the
     // weeping whips don't scrape the floor.
-    type: 'broadleaf', barkStyle: 'smooth',
+    type: 'broadleaf', barkStyle: 'oak',
     trunkHeight: 8, tipRadius: 0.005, rootFlare: 0.55,
     trunkBow: 0.45, trunkLean: 0.05, trunkLeanDir: 220, trunkJitter: 0.07,
     globalScale: 1.1,
@@ -587,7 +587,7 @@ export const SPECIES = {
     // OPPOSITE phyllotaxis — branches and leaves in pairs. Short fat trunk,
     // wide irregular crown. trunkHeight 4.5 → 5 + baseSize 0.1 → 0.15 so
     // low branches clear the ground more reliably.
-    type: 'broadleaf', barkStyle: 'cherry',
+    type: 'broadleaf', barkStyle: 'olive',
     trunkHeight: 5, tipRadius: 0.007, rootFlare: 0.55,
     trunkJitter: 0.1,
     globalScale: 0.75,
@@ -618,7 +618,7 @@ export const SPECIES = {
     // Adansonia: massive swollen trunk with short radial branches only at
     // the very top. Alternate phyllotaxis on palmate compound leaves.
     // baseSize 0.6 keeps the famously clean trunk.
-    type: 'broadleaf', barkStyle: 'oak',
+    type: 'broadleaf', barkStyle: 'smooth',
     trunkHeight: 6, tipRadius: 0.012, rootFlare: 1.0,
     trunkLean: 0.04, trunkLeanDir: 15, trunkJitter: 0.07,
     globalScale: 0.9,
@@ -645,7 +645,7 @@ export const SPECIES = {
     // Single-order architecture: fronds emerge directly from the trunk apex
     // in a spiral. No secondary branching in real palms. trunkHeight lifted
     // so the frond crown is clearly above human eye-level.
-    type: 'broadleaf', barkStyle: 'smooth',
+    type: 'broadleaf', barkStyle: 'palm',
     trunkHeight: 11, tipRadius: 0.05, rootFlare: 0.4,
     trunkLean: 0.12, trunkLeanDir: 35, trunkBow: 0.3,
     globalScale: 0.85,
@@ -806,7 +806,7 @@ export const SPECIES = {
     // Fagus sylvatica/grandifolia — smooth gray trunk, dense ovate-domed
     // crown. Branches start high (clean bole), dense layered canopy, slight
     // weep at the very tips.
-    type: 'broadleaf', barkStyle: 'smooth',
+    type: 'broadleaf', barkStyle: 'beech',
     trunkHeight: 13, tipRadius: 0.005, rootFlare: 0.4,
     trunkJitter: 0.04,
     barkHue: -0.05, barkLum: 0.45, barkRoughness: 0.7, barkNormalStrength: 0.6,
@@ -833,7 +833,7 @@ export const SPECIES = {
   PlaneTree: {
     // Platanus × hispanica (London Plane) — broad spreading crown, palmate
     // leaves, mottled bark. Iconic city tree. Massive horizontal scaffolds.
-    type: 'broadleaf',
+    type: 'broadleaf', barkStyle: 'plane',
     trunkHeight: 14, tipRadius: 0.006, rootFlare: 0.6,
     trunkJitter: 0.06,
     barkHue: 0.05, barkLum: 0.55, barkRoughness: 0.7, barkNormalStrength: 0.9,
@@ -859,7 +859,7 @@ export const SPECIES = {
   Ginkgo: {
     // Ginkgo biloba — living fossil. Pyramidal when young, more spreading
     // with age. Distinctive fan-shaped leaves, brilliant golden autumn.
-    type: 'broadleaf',
+    type: 'broadleaf', barkStyle: 'oak',
     trunkHeight: 11, tipRadius: 0.006, rootFlare: 0.4,
     trunkJitter: 0.05,
     globalScale: 1.0,
@@ -886,7 +886,7 @@ export const SPECIES = {
     // Populus nigra 'Italica' — narrow columnar exclamation point.
     // Branches sweep dramatically upward against the trunk. Iconic Tuscan
     // landscape and windbreak rows.
-    type: 'broadleaf',
+    type: 'broadleaf', barkStyle: 'oak',
     trunkHeight: 16, tipRadius: 0.005, rootFlare: 0.25,
     trunkJitter: 0.04,
     globalScale: 1.0,
@@ -911,7 +911,7 @@ export const SPECIES = {
   JapaneseMaple: {
     // Acer palmatum — small ornamental, ~5m. Layered horizontal branches,
     // delicate dissected palmate leaves, brilliant red autumn.
-    type: 'broadleaf',
+    type: 'broadleaf', barkStyle: 'maple',
     trunkHeight: 4, tipRadius: 0.004, rootFlare: 0.35,
     trunkJitter: 0.08,
     globalScale: 0.6,
@@ -940,7 +940,7 @@ export const SPECIES = {
     // Eucalyptus globulus / camaldulensis — tall, sparse upper canopy,
     // long pendulous lance leaves, smooth peeling bark. Open silhouette
     // with most foliage at the ends of long branches.
-    type: 'broadleaf',
+    type: 'broadleaf', barkStyle: 'eucalyptus',
     trunkHeight: 17, tipRadius: 0.006, rootFlare: 0.4,
     trunkJitter: 0.05,
     barkHue: 0.02, barkLum: 0.5, barkRoughness: 0.55, barkNormalStrength: 0.5,
@@ -998,7 +998,7 @@ export const SPECIES = {
     cConeCount: 10, cConeSize: 0.18, cConeHang: 0.8,
   },
   Cedar: {
-    type: 'conifer', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'cedar',
     trunkHeight: 16, tipRadius: 0.03, rootFlare: 0.7,
     shape: 'conical', baseSize: 0.2,
     leafSize: 0.14, leafFacing: 0.45, leavesPerTip: 22, leafChainSteps: 4, season: 0.2,
@@ -1015,7 +1015,7 @@ export const SPECIES = {
     cConeCount: 6, cConeSize: 0.3, cConeHang: 0.2,
   },
   Cypress: {
-    type: 'conifer',
+    type: 'conifer', barkStyle: 'cedar',
     trunkHeight: 14, tipRadius: 0.022, rootFlare: 0.35,
     shape: 'cylindrical', baseSize: 0.05,
     leafSize: 0.08, leafFacing: 0.65, leavesPerTip: 28, leafChainSteps: 4, season: 0.2,
@@ -1085,7 +1085,7 @@ export const SPECIES = {
   Hemlock: {
     // Eastern Hemlock: graceful drooping conifer with soft silhouette —
     // tips of every branch droop noticeably.
-    type: 'conifer', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'cedar',
     trunkHeight: 16, tipRadius: 0.02, rootFlare: 0.35,
     shape: 'conical', baseSize: 0.1,
     leafSize: 0.1, leafFacing: 0.55, leavesPerTip: 28, leafChainSteps: 5, season: 0.2,
@@ -1102,7 +1102,7 @@ export const SPECIES = {
   },
   Juniper: {
     // Juniper: short shrub-like conifer — dense rounded crown, tiny needles.
-    type: 'conifer', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'cedar',
     trunkHeight: 4, tipRadius: 0.02, rootFlare: 0.4,
     globalScale: 0.55,
     shape: 'spherical', baseSize: 0.05,
@@ -1121,7 +1121,7 @@ export const SPECIES = {
   Redwood: {
     // Coast Redwood / Sequoia: massive columnar tower. Thick trunk,
     // narrow crown, clean lower bole.
-    type: 'conifer', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'redwood',
     trunkHeight: 24, tipRadius: 0.028, rootFlare: 0.75,
     globalScale: 1.1,
     shape: 'cylindrical', baseSize: 0.3,
