@@ -8509,10 +8509,31 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   };
 
   scrubber.addEventListener('pointerdown', (e) => {
+    // Middle click = reset to schema default (system-wide on every
+    // scrubber). Same affordance as double-click, but a single press —
+    // useful when iterating fast through "tweak / reset / tweak".
+    if (e.button === 1) {
+      e.preventDefault();  // suppress middle-click autoscroll
+      const target = Math.round((p.default - p.min) / p.step);
+      applyStep(target, true);
+      return;
+    }
     if (e.button > 0) return;
     dragStartX = e.clientX;
     pending = true;
     pendingPid = e.pointerId;
+  });
+  // Suppress the browser's middle-click autoscroll cursor — Chrome shows
+  // it on mousedown even if pointerdown preventDefault'd, so we belt-and-
+  // suspenders on the mousedown event too.
+  scrubber.addEventListener('mousedown', (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
+  // auxclick fires after a successful middle-click; cancel it so any
+  // ancestor handlers (e.g. row-level tooltip toggles) don't interpret
+  // the reset as a separate click.
+  scrubber.addEventListener('auxclick', (e) => {
+    if (e.button === 1) { e.preventDefault(); e.stopPropagation(); }
   });
 
   scrubber.addEventListener('pointermove', (e) => {
@@ -8623,6 +8644,19 @@ function createSelectRow(p, getter, setter, onAfter) {
     setter(e.target.value);
     if (onAfter) { onAfter(e.target.value); commitHistorySoon(); } else debouncedGenerate();
   });
+  // Middle-click resets to schema default (system-wide convention).
+  row.addEventListener('mousedown', (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
+  row.addEventListener('auxclick', (e) => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (select.value === p.default) return;
+    select.value = p.default;
+    setter(p.default);
+    if (onAfter) { onAfter(p.default); commitHistorySoon(); } else debouncedGenerate();
+  });
   row.append(name, select);
   return row;
 }
@@ -8680,6 +8714,22 @@ function createThumbnailRow(p, getter, setter, onAfter) {
   // state when something else (e.g. species apply) changes the value.
   wrap.dataset.pkey = p.key;
   wrap._applyValue = setActive;
+  // Middle-click anywhere in the row resets to the schema default —
+  // matches the system-wide scrubber convention. Suppress autoscroll on
+  // mousedown; auxclick handles the actual reset (so a stray drag
+  // doesn't double-fire it).
+  wrap.addEventListener('mousedown', (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
+  wrap.addEventListener('auxclick', (e) => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (active === p.default) return;
+    setActive(p.default);
+    setter(p.default);
+    if (onAfter) { onAfter(p.default); commitHistorySoon(); } else debouncedGenerate();
+  });
   return wrap;
 }
 
