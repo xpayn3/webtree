@@ -1045,6 +1045,58 @@ body.sculpt-live #sidebar-body::before {
 }
 #sk-pill .sk-label { color: rgba(235, 235, 238, 0.92); }
 
+/* Paused variant — appears when the tab loses focus. Centred over the
+   WebGPU viewport (compensating for the 320px right sidebar + ~14px gap)
+   and rendered in a high-visibility yellow so the user immediately sees
+   why the scene stopped updating. Sidebar-hidden modes (sculpt / leaf
+   creator) reset the offset so the pill stays canvas-centred there too. */
+#sk-pill.paused {
+  /* Sidebar is on the right; shift the pill left by half its footprint
+     (320 + 14 ≈ 167) so the pill sits over the centre of the visible
+     canvas, not the centre of the window. */
+  left: calc(50% - 167px);
+  top: 22px;
+  padding: 9px 16px 9px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  background: linear-gradient(180deg, #fde047 0%, #f5c518 100%);
+  border-color: rgba(120, 80, 0, 0.55);
+  color: #2a1d00;
+  box-shadow:
+    0 6px 20px rgba(245, 197, 24, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+  /* The default pill backdrop-blur reads weird against a saturated
+     yellow — turn it off for this variant. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* Subtle attention-grabbing pulse so a returning user can't miss it. */
+  animation: skPaused-pulse 2.4s var(--ease-out) infinite;
+}
+#sk-pill.paused .sk-key {
+  background: rgba(0, 0, 0, 0.18);
+  color: #2a1d00;
+  border-color: rgba(0, 0, 0, 0.25);
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+#sk-pill.paused .sk-label {
+  color: #2a1d00;
+  font-weight: 500;
+}
+@keyframes skPaused-pulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(245, 197, 24, 0.28), 0 2px 6px rgba(0, 0, 0, 0.4); }
+  50%      { box-shadow: 0 6px 28px rgba(245, 197, 24, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4); }
+}
+/* Sidebar-hidden modes — recentre over the (now full-width) canvas. */
+body.sculpt-mode #sk-pill.paused,
+body.leaf-creator-mode #sk-pill.paused,
+body.bake-mode #sk-pill.paused {
+  left: 50%;
+}
+@media (prefers-reduced-motion: reduce) {
+  #sk-pill.paused { animation: none; }
+}
+
 /* ---------- toast notifications ---------- */
 #toasts {
   position: fixed;

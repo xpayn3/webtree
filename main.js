@@ -14610,7 +14610,7 @@ function tickPauseFade(dt) {
 function setPaused(on) {
   const wasPaused = _paused;
   _paused = on;
-  if (on) showPillPersistent('zZ', 'Paused');
+  if (on) showPillPersistent('zZ', 'Paused', 'paused');
   else    hidePillPersistent();
   // Refresh light-base cache in case the lighting preset changed since last pause.
   if (on && !wasPaused) {
@@ -15367,12 +15367,18 @@ function showShortcutPill(key, label) {
 
 // Persistent variant — used for the "Paused" status while the tab is
 // backgrounded. Survives shortcut flashes (they bail via _pillLocked).
+// Optional `variant` adds a modifier class (e.g. 'paused' for yellow,
+// viewport-centered styling).
 let _pillLocked = false;
-function showPillPersistent(key, label) {
+let _pillVariant = '';
+function showPillPersistent(key, label, variant = '') {
   _pillLocked = true;
   clearTimeout(_skTimer); clearTimeout(_skHideTimer);
   _skKey.textContent = key;
   _skLabel.textContent = label;
+  if (_pillVariant) _skPill.classList.remove(_pillVariant);
+  _pillVariant = variant;
+  if (variant) _skPill.classList.add(variant);
   _skPill.hidden = false;
   requestAnimationFrame(() => requestAnimationFrame(() => _skPill.classList.add('show')));
 }
@@ -15380,6 +15386,7 @@ function hidePillPersistent() {
   _pillLocked = false;
   clearTimeout(_skTimer); clearTimeout(_skHideTimer);
   _skPill.classList.remove('show');
+  if (_pillVariant) { _skPill.classList.remove(_pillVariant); _pillVariant = ''; }
   _skHideTimer = setTimeout(() => { _skPill.hidden = true; }, 200);
 }
 
