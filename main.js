@@ -2369,8 +2369,10 @@ let personRefMesh = null;
   // curveSegments 24 — bezier resolution per quadraticCurveTo. Default 12
   // gives faceted shoulders/calves at 1.8 m; 24 reads as smooth.
   const geo = new THREE.ShapeGeometry(shape, 24);
+  // Accent blue (matches CSS --accent #80b3ff) so the scale ref reads as a
+  // UI element rather than a misplaced lit object in the scene.
   const mat = new THREE.MeshBasicMaterial({
-    color: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+    color: 0x80b3ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
     depthTest: true, toneMapped: false,
   });
   personRefMesh = new THREE.Mesh(geo, mat);
@@ -2378,10 +2380,11 @@ let personRefMesh = null;
   personRefMesh.visible = false;
   scene.add(personRefMesh);
 
-  // Outline edges so it reads as a silhouette even when bloomed.
+  // Outline edges so it reads as a silhouette even when bloomed. Brighter
+  // accent variant (CSS --accent-bright) so the contour pops against the fill.
   const edges = new THREE.EdgesGeometry(geo, 10);
   const outline = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-    color: 0xffffff, transparent: true, opacity: 0.9, toneMapped: false,
+    color: 0xb8d0ff, transparent: true, opacity: 0.9, toneMapped: false,
   }));
   personRefMesh.add(outline);
 }
@@ -2416,7 +2419,29 @@ for (const t of [_barkImgAlbedo, _barkImgNormal]) {
 // species switches don't re-run the generator. Tilable: built from a
 // periodic value-noise grid (true wrap) plus pure-sine fissure/band
 // patterns (perfectly periodic by construction).
+// LRU-capped — without this, every unique slider value combination created
+// a new ~512KB { albedoCanvas, normalCanvas } entry and the cache grew
+// unbounded (stress test saw +270 MB heap after 90s of slider drags).
+// 24 entries ≈ 12 MB CPU + matching GPU upload, plenty for thrashing
+// between the active style and a few recent variants without ballooning.
 const _BARK_TEX_CACHE = new Map();
+const _BARK_TEX_CACHE_MAX = 24;
+function _lruGet(map, key) {
+  if (!map.has(key)) return undefined;
+  const v = map.get(key);
+  // Touch — move to end so recently-used entries survive eviction.
+  map.delete(key);
+  map.set(key, v);
+  return v;
+}
+function _lruSet(map, key, value, max) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, value);
+  while (map.size > max) {
+    const oldest = map.keys().next().value;
+    map.delete(oldest);
+  }
+}
 
 // Recipes tuned for default 0.5 tiles/m repeat (2 m per tile) at 5-15 m
 // camera distance. Each recipe targets a real-tree-bark archetype:
@@ -2772,7 +2797,7 @@ function generateBarkTexture(style = 'oak', seed = 1) {
     p.largeFreq + ',' + p.largeAmp + ',' + p.largePattern + ':' +
     p.microFreq + ',' + p.microAmp + ',' + p.microPattern + ':' +
     p.normalStrength + ',' + p.grain;
-  const cached = _BARK_TEX_CACHE.get(key);
+  const cached = _lruGet(_BARK_TEX_CACHE, key);
   if (cached) return cached;
 
   // 256² regen runs in 15-25 ms instead of 50-100 ms at 512² — fast
@@ -2911,7 +2936,7 @@ function generateBarkTexture(style = 'oak', seed = 1) {
     nCtx.putImageData(nImg, 0, 0);
 
     const result = { albedoCanvas: aCanvas, normalCanvas: nCanvas };
-    _BARK_TEX_CACHE.set(key, result);
+    _lruSet(_BARK_TEX_CACHE, key, result, _BARK_TEX_CACHE_MAX);
     return result;
   } catch (err) {
     // Bulletproof fallback — render-time consumer (applyBarkStyle) sees
@@ -2964,12 +2989,21 @@ const barkNormal = (() => {
 // Slim albedo-only renderer for the style picker thumbnails. Uses the
 // preset recipe defaults (no P slider overrides) so each thumbnail always
 // shows the canonical look of that preset, regardless of the user's
-// current edits. Cached forever — recipes never change at runtime.
+// current edits. Caches the raw pixel buffer (Uint8ClampedArray) instead
+// of the canvas, then stamps onto a fresh canvas per call — same fix as
+// generateNoiseThumbnail (DOM appendChild moves nodes, so a cached canvas
+// reused by two pickers ends up parented to whichever ran last, leaving
+// the other empty / black).
 const _BARK_THUMB_CACHE = new Map();
 function generateBarkThumbnail(style, size = 48) {
   const key = style + ':' + size;
-  const cached = _BARK_THUMB_CACHE.get(key);
-  if (cached) return cached;
+  const cachedPixels = _BARK_THUMB_CACHE.get(key);
+  if (cachedPixels) {
+    const cv2 = document.createElement('canvas');
+    cv2.width = size; cv2.height = size;
+    cv2.getContext('2d').putImageData(new ImageData(cachedPixels, size, size), 0, 0);
+    return cv2;
+  }
   const recipeRaw = BARK_STYLES[style] || BARK_STYLES.oak;
   // Snap freqs to integers so the thumb tiles cleanly — same logic as
   // generateBarkTexture (see comment there for why fractional freqs seam).
@@ -3043,7 +3077,9 @@ function generateBarkThumbnail(style, size = 48) {
     }
   }
   ctx.putImageData(img, 0, 0);
-  _BARK_THUMB_CACHE.set(key, cv);
+  // Cache the raw pixel buffer (not the canvas) so future calls stamp
+  // onto a fresh canvas, avoiding DOM-parent contention.
+  _BARK_THUMB_CACHE.set(key, new Uint8ClampedArray(data));
   return cv;
 }
 
@@ -12279,7 +12315,26 @@ function syncUI() {
 // Regenerate handled via the toolbar button (tb-regen).
 
 // --- Species presets ------------------------------------------------------
+// Coalesce rapid species switches — applySpecies wipes P, rebuilds the
+// sidebar level cards, and triggers a full tree regenerate (200-1000 ms
+// of synchronous work + a worker rebuild). Without coalescing, clicking
+// through 10 species in a couple of seconds queued 10 full rebuilds
+// serially, locking the main thread for 30+ s. We delay execution by
+// one rAF; if another call arrives before then, we just update the
+// pending name.
+let _applySpeciesPending = null;
+let _applySpeciesRaf = 0;
 function applySpecies(name) {
+  _applySpeciesPending = name;
+  if (_applySpeciesRaf) return;
+  _applySpeciesRaf = requestAnimationFrame(() => {
+    _applySpeciesRaf = 0;
+    const target = _applySpeciesPending;
+    _applySpeciesPending = null;
+    return _applySpeciesImpl(target);
+  });
+}
+function _applySpeciesImpl(name) {
   const spec = (name !== 'Custom' && SPECIES[name]) ? SPECIES[name] : null;
   if (!spec && name !== 'Custom') return; // unknown species — bail
   // Capture the current tree type BEFORE we reset schema defaults — Custom
