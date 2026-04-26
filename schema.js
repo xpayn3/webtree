@@ -602,21 +602,31 @@ export const SPECIES = {
     trunkLean: 0.12, trunkLeanDir: 35, trunkBow: 0.3,
     globalScale: 0.85,
     leafShape: 'Lanceolate',
-    // Big drooping pinnate leaflets — leafSize big, density high, slight tilt.
-    // leafMaxRadius cranked: palm fronds are an order of magnitude thicker
-    // than typical broadleaf twigs so the default 0.08 radius gate would
-    // reject every frond and the crown would render bare.
-    leafSize: 0.6, leafDroop: 0.85, leafFacing: 0.15, leafStemLen: 0.02, leafStemAngle: 0.2, leafTilt: 0.25,
+    // Each "leaf" here represents a single PALM LEAFLET (we don't render
+    // pinnate compound leaves natively, so the rachis = the L1 frond chain
+    // and the leaflets = many big lances attached perpendicular to it).
+    //
+    // - leafSize 0.95: leaflets are long, real palm leaflets are 0.5-1m+.
+    // - leafSpread 1.05: pushes leaflets out PERPENDICULAR to the rachis
+    //   (1.0 = exactly 90°, slightly past makes them lean back away from
+    //   the trunk). This is what makes them "all point out" instead of
+    //   spiraling around the frond axis.
+    // - leafPhyllotaxis 'opposite': two flat rows down the rachis,
+    //   matching the real pinnate arrangement.
+    // - leafFacing 0.85: each leaflet's face stays roughly aligned with
+    //   the frond's local plane so the row reads as flat, not twisted.
+    // - leafTilt 0: no apex tip-up — leaflets stay perpendicular.
+    // - leafClusterSize 1: one leaflet per attachment slot (we don't want
+    //   bunches of overlapping lances at every step).
+    leafSize: 0.95, leafDroop: 0.5, leafFacing: 0.85, leafSpread: 1.05,
+    leafStemLen: 0.0, leafStemAngle: 0.05, leafTilt: 0,
     leafMaxRadius: 0.6,
     // Palm fronds need an aggressive lengthwise curl + side cup so each
-    // leaf bends like a real palm leaf, not a flat lance. We already build
-    // a curved 8-row strip in rebuildLeafGeo — defaults of 0.08/0.15 read
-    // as flat at frond scale; cranking these is what makes the silhouette
-    // recognizable.
+    // leaflet bends like a real palm leaflet (each lance gently arcs).
     leafApexCurl: 0.38, leafMidribCurl: 0.45,
-    leavesPerTip: 32, leafChainSteps: 8, leavesStart: 0.5, season: 0.2,
-    leafClusterSize: 4, leafClusterSpread: 0.6,
-    leafPhyllotaxis: 'spiral',
+    leavesPerTip: 28, leafChainSteps: 8, leavesStart: 0.5, season: 0.2,
+    leafClusterSize: 1, leafClusterSpread: 0.0,
+    leafPhyllotaxis: 'opposite',
     pruneMode: 'off',
     levels: [
       // Palm: tufted radial whorl at the very top — no true branching in

@@ -2310,16 +2310,262 @@ const leafMapA = loadColor('./tex/leaf.png');
 const leafMapB = loadColor('./tex/leaf_b.png');
 const leafNormal = texLoader.load('./tex/leaf_normal.jpg');
 leafNormal.anisotropy = 8;
-const barkAlbedo = loadColor('./tex/bark.jpg');
-const barkNormal = texLoader.load('./tex/bark_normal.jpg');
-barkNormal.anisotropy = 8;
-for (const t of [barkAlbedo, barkNormal]) {
+// Original image textures — kept as a hard fallback if the generator fails
+// for any reason, and as the initial map until the first species applies.
+const _barkImgAlbedo = loadColor('./tex/bark.jpg');
+const _barkImgNormal = texLoader.load('./tex/bark_normal.jpg');
+_barkImgNormal.anisotropy = 8;
+for (const t of [_barkImgAlbedo, _barkImgNormal]) {
   t.wrapS = THREE.RepeatWrapping;
   t.wrapT = THREE.RepeatWrapping;
-  // UVs are now written in METERS (uv.x = meters along, uv.y = meters around).
-  // repeat acts as "tiles per meter" in each axis. No rotation — bark.jpg
-  // grain runs along texture-U which maps to along-trunk with default axes.
   t.repeat.set(2, 2);
+}
+
+// --- Procedural bark texture generator ----------------------------------
+// Generates a tilable albedo + normal canvas texture per bark style. Each
+// style is a recipe of (vertical fissure / horizontal band / large-scale /
+// micro-detail) parameters. Result is cached by `style:seed` so repeated
+// species switches don't re-run the generator. Tilable: built from a
+// periodic value-noise grid (true wrap) plus pure-sine fissure/band
+// patterns (perfectly periodic by construction).
+const _BARK_TEX_CACHE = new Map();
+
+const BARK_STYLES = {
+  oak: {
+    // Deep vertical fissures, blocky scales, brown-grey palette.
+    vertFreq: 8, vertSharp: 6, vertWobble: 0.05, vertDepth: 0.45,
+    horizFreq: 12, horizSharp: 1, horizAmp: 0.12,
+    largeFreq: 2, largeAmp: 0.18,
+    microFreq: 60, microAmp: 0.06,
+    palette: [[36, 28, 20], [88, 72, 55], [148, 130, 105]],
+    normalStrength: 4.5,
+    grain: 6,
+  },
+  pine: {
+    // Big overlapping plates, reddish-brown.
+    vertFreq: 5, vertSharp: 1.5, vertWobble: 0.12, vertDepth: 0.30,
+    horizFreq: 7, horizSharp: 3, horizAmp: 0.42,
+    largeFreq: 1.5, largeAmp: 0.20,
+    microFreq: 40, microAmp: 0.05,
+    palette: [[48, 28, 18], [115, 75, 48], [175, 130, 88]],
+    normalStrength: 3.5,
+    grain: 5,
+  },
+  birch: {
+    // Papery white with sharp horizontal lenticels and faint peeling
+    // patches via large-scale noise.
+    vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
+    horizFreq: 50, horizSharp: 16, horizAmp: 0.50,
+    largeFreq: 2.5, largeAmp: 0.30,
+    microFreq: 28, microAmp: 0.025,
+    palette: [[35, 30, 26], [205, 200, 192], [242, 240, 234]],
+    normalStrength: 0.9,
+    grain: 4,
+  },
+  cherry: {
+    // Smooth red-brown with thin lenticel rings.
+    vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
+    horizFreq: 70, horizSharp: 6, horizAmp: 0.20,
+    largeFreq: 3, largeAmp: 0.18,
+    microFreq: 35, microAmp: 0.04,
+    palette: [[55, 30, 22], [108, 60, 45], [158, 100, 78]],
+    normalStrength: 1.4,
+    grain: 4,
+  },
+  smooth: {
+    // Beech / olive — gentle gradient with patchy variation.
+    vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
+    horizFreq: 0, horizSharp: 0, horizAmp: 0,
+    largeFreq: 2.5, largeAmp: 0.28,
+    microFreq: 30, microAmp: 0.04,
+    palette: [[110, 105, 98], [165, 160, 152], [205, 200, 192]],
+    normalStrength: 0.7,
+    grain: 4,
+  },
+};
+
+// Periodic value-noise factory. Returns `(u, v) → [0, 1]`. Tiles exactly
+// at u, v ∈ [0, 1) because the grid wraps modulo `period`.
+function _makeTilableNoise(seed, period) {
+  const grid = new Float32Array(period * period);
+  let s = (seed | 0) >>> 0;
+  for (let i = 0; i < grid.length; i++) {
+    s = ((s * 1664525) + 1013904223) >>> 0;
+    grid[i] = (s & 0xffffff) / 0xffffff;
+  }
+  return function (u, v) {
+    let fu = (u - Math.floor(u)) * period;
+    let fv = (v - Math.floor(v)) * period;
+    const ix = Math.floor(fu) % period;
+    const iy = Math.floor(fv) % period;
+    const ix1 = (ix + 1) % period;
+    const iy1 = (iy + 1) % period;
+    const wx = fu - Math.floor(fu);
+    const wy = fv - Math.floor(fv);
+    const sx = wx * wx * (3 - 2 * wx);
+    const sy = wy * wy * (3 - 2 * wy);
+    const a = grid[iy * period + ix];
+    const b = grid[iy * period + ix1];
+    const c = grid[iy1 * period + ix];
+    const d = grid[iy1 * period + ix1];
+    return (a * (1 - sx) + b * sx) * (1 - sy) + (c * (1 - sx) + d * sx) * sy;
+  };
+}
+
+function generateBarkTexture(style = 'oak', seed = 1) {
+  const key = style + ':' + seed;
+  const cached = _BARK_TEX_CACHE.get(key);
+  if (cached) return cached;
+
+  const p = BARK_STYLES[style] || BARK_STYLES.oak;
+  const N = 512;
+  let albedoTex, normalTex;
+
+  try {
+    // Tilable noise — pre-built grids at multiple scales.
+    const noiseLarge = _makeTilableNoise(seed, 8);
+    const noiseMid   = _makeTilableNoise(seed + 7, 16);
+    const noiseFine  = _makeTilableNoise(seed + 13, 64);
+    const noiseGrain = _makeTilableNoise(seed + 23, 128);
+
+    // Build the height field once — used for both albedo (palette lookup)
+    // and normal map (central differences).
+    const height = new Float32Array(N * N);
+    for (let y = 0; y < N; y++) {
+      const v = y / N;
+      for (let x = 0; x < N; x++) {
+        const u = x / N;
+        let h = 0.5;
+
+        // Vertical fissures — sin wave with noise wobble. Pure sin in u
+        // tiles automatically; noise wobble uses tilable noise.
+        if (p.vertFreq > 0 && p.vertDepth > 0) {
+          const wobble = (noiseMid(u * 4, v * 8) - 0.5) * p.vertWobble;
+          const fissure = Math.sin((u + wobble) * Math.PI * 2 * p.vertFreq);
+          const sharp = Math.pow(Math.max(0, 1 - Math.abs(fissure)), p.vertSharp);
+          h -= sharp * p.vertDepth;
+        }
+
+        // Horizontal bands — lenticels (birch/cherry, sharp) or plates
+        // (pine, broad). Same sin-with-wobble pattern in v.
+        if (p.horizFreq > 0 && p.horizAmp > 0) {
+          const wobble = (noiseMid(u * 6, v * 4) - 0.5) * 0.04;
+          const band = Math.sin((v + wobble) * Math.PI * 2 * p.horizFreq);
+          const sharp = Math.pow(Math.max(0, 1 - Math.abs(band)), p.horizSharp);
+          h += (sharp - 0.5) * p.horizAmp;
+        }
+
+        // Large-scale variation — patchy regions across the trunk.
+        if (p.largeAmp > 0) {
+          h += (noiseLarge(u * p.largeFreq, v * p.largeFreq) - 0.5) * p.largeAmp;
+        }
+
+        // Micro detail — final fine bump pattern.
+        if (p.microAmp > 0) {
+          h += (noiseFine(u * p.microFreq, v * p.microFreq) - 0.5) * p.microAmp;
+        }
+
+        height[y * N + x] = Math.max(0, Math.min(1, h));
+      }
+    }
+
+    // Albedo — three-stop palette interpolated by height.
+    const aCanvas = document.createElement('canvas');
+    aCanvas.width = N; aCanvas.height = N;
+    const aCtx = aCanvas.getContext('2d');
+    const aImg = aCtx.createImageData(N, N);
+    const aData = aImg.data;
+    const pal = p.palette;
+    const grainAmp = p.grain || 0;
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const i = y * N + x;
+        const h = height[i];
+        let r, g, b;
+        if (h < 0.5) {
+          const t = h * 2;
+          r = pal[0][0] * (1 - t) + pal[1][0] * t;
+          g = pal[0][1] * (1 - t) + pal[1][1] * t;
+          b = pal[0][2] * (1 - t) + pal[1][2] * t;
+        } else {
+          const t = (h - 0.5) * 2;
+          r = pal[1][0] * (1 - t) + pal[2][0] * t;
+          g = pal[1][1] * (1 - t) + pal[2][1] * t;
+          b = pal[1][2] * (1 - t) + pal[2][2] * t;
+        }
+        if (grainAmp > 0) {
+          const grain = (noiseGrain(x / N, y / N) - 0.5) * grainAmp * 2;
+          r += grain; g += grain; b += grain;
+        }
+        const o = i * 4;
+        aData[o    ] = r < 0 ? 0 : r > 255 ? 255 : r;
+        aData[o + 1] = g < 0 ? 0 : g > 255 ? 255 : g;
+        aData[o + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+        aData[o + 3] = 255;
+      }
+    }
+    aCtx.putImageData(aImg, 0, 0);
+
+    // Normal map — central differences on the height field, wrap-aware
+    // so the seam tiles correctly. Standard tangent-space encoding
+    // (XYZ → 0..255 via *0.5+0.5).
+    const nCanvas = document.createElement('canvas');
+    nCanvas.width = N; nCanvas.height = N;
+    const nCtx = nCanvas.getContext('2d');
+    const nImg = nCtx.createImageData(N, N);
+    const nData = nImg.data;
+    const ns = p.normalStrength || 2;
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const xL = (x - 1 + N) % N;
+        const xR = (x + 1) % N;
+        const yU = (y - 1 + N) % N;
+        const yD = (y + 1) % N;
+        const dx = (height[y * N + xR] - height[y * N + xL]) * ns;
+        const dy = (height[yD * N + x] - height[yU * N + x]) * ns;
+        const m = Math.sqrt(dx * dx + dy * dy + 1) || 1;
+        const nx = -dx / m, ny = -dy / m, nz = 1 / m;
+        const o = (y * N + x) * 4;
+        nData[o    ] = (nx * 0.5 + 0.5) * 255;
+        nData[o + 1] = (ny * 0.5 + 0.5) * 255;
+        nData[o + 2] = (nz * 0.5 + 0.5) * 255;
+        nData[o + 3] = 255;
+      }
+    }
+    nCtx.putImageData(nImg, 0, 0);
+
+    albedoTex = new THREE.CanvasTexture(aCanvas);
+    albedoTex.wrapS = albedoTex.wrapT = THREE.RepeatWrapping;
+    albedoTex.colorSpace = THREE.SRGBColorSpace;
+    albedoTex.anisotropy = 8;
+    albedoTex.repeat.set(2, 2);
+
+    normalTex = new THREE.CanvasTexture(nCanvas);
+    normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+    normalTex.anisotropy = 8;
+    normalTex.repeat.set(2, 2);
+  } catch (err) {
+    // Bulletproof fallback: any failure → reuse the bundled JPG textures
+    // so the tree never renders unmapped. Logged so we can spot
+    // generator regressions in the console.
+    console.warn('[bark-gen] failed for style', style, '— using fallback', err);
+    albedoTex = _barkImgAlbedo;
+    normalTex = _barkImgNormal;
+  }
+
+  const result = { albedo: albedoTex, normal: normalTex };
+  _BARK_TEX_CACHE.set(key, result);
+  return result;
+}
+
+// Active textures — start as the 'oak' generated set so even before the
+// first species applies, the tree carries a procedural bark.
+let barkAlbedo = _barkImgAlbedo;
+let barkNormal = _barkImgNormal;
+{
+  const initial = generateBarkTexture('oak', 1);
+  barkAlbedo = initial.albedo;
+  barkNormal = initial.normal;
 }
 
 // --- Wind (TSL vertex displacement) --------------------------------------
@@ -3151,7 +3397,30 @@ function applyLeafMaterial() {
 }
 
 const _barkTint = new THREE.Color();
+// Swap the bark material's textures to the procedural pair generated for
+// the active style. Called from applyBarkMaterial so every species change
+// (which triggers a full rebuild → applyBarkMaterial) picks up new bark.
+let _activeBarkStyle = '__none__';
+let _activeBarkSeed = -1;
+function applyBarkStyle() {
+  const style = P.barkStyle || 'oak';
+  const seed  = P.barkSeed ?? 1;
+  if (style === _activeBarkStyle && seed === _activeBarkSeed) return;
+  const tex = generateBarkTexture(style, seed);
+  if (!tex) return;
+  barkAlbedo = tex.albedo;
+  barkNormal = tex.normal;
+  if (barkMat) {
+    barkMat.map = barkAlbedo;
+    barkMat.normalMap = barkNormal;
+    barkMat.needsUpdate = true;
+  }
+  _activeBarkStyle = style;
+  _activeBarkSeed  = seed;
+}
+
 function applyBarkMaterial() {
+  applyBarkStyle();
   const hue = P.barkHue ?? 0.08;
   const tint = P.barkTint ?? 0;
   _barkTint.setHSL(hue, 0.5, 0.5);
@@ -3265,6 +3534,11 @@ P.settings = {
   autoOrbitSpeed: 8,
 };
 P.treeType = 'broadleaf';
+// Procedural bark style. Picked per species; falls back to 'oak'. The
+// generator produces an albedo + normal CanvasTexture pair on first use
+// per (style, seed) and caches the result.
+P.barkStyle = 'oak';
+P.barkSeed  = 1;
 // Bake mode: self-organizing tree growth simulation (Palubicki-lite).
 // Leaf shape source: 'Texture' (bundled PNG), 'Upload' (user PNG),
 // 'Oval' / 'Lanceolate' / 'Heart' / 'Fan' / 'Willow' / 'Birch' (preset
