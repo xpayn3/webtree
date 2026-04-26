@@ -2227,38 +2227,11 @@ function applyTheme(name) {
   if (treeWireMat) treeWireMat.color.setHex(T.wireColor);
 }
 
-// --- Soft contact shadow beneath the tree --------------------------------
-{
-  const c = document.createElement('canvas');
-  c.width = c.height = 512;
-  const ctx = c.getContext('2d');
-  const grad = ctx.createRadialGradient(256, 256, 0, 256, 256, 256);
-  grad.addColorStop(0,    'rgba(0,0,0,0.55)');
-  grad.addColorStop(0.35, 'rgba(0,0,0,0.28)');
-  grad.addColorStop(0.7,  'rgba(0,0,0,0.08)');
-  grad.addColorStop(1,    'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 512, 512);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const shadowMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(18, 18),
-    new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, depthWrite: false,
-      // Very small polygon offset — just enough to break the z-tie with
-      // the cyc backdrop at grazing angles. The previous -4/-4 was so
-      // aggressive it bled the shadow's dark gradient onto the bottom
-      // 1-5 cm of every vertical mesh (trunk base, avatar legs).
-      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
-    }),
-  );
-  shadowMesh.rotation.x = -Math.PI / 2;
-  // Sit just above the floor — enough to clear z-fight, low enough to not
-  // visibly overlap the bottom of standing geometry.
-  shadowMesh.position.y = 0.005;
-  shadowMesh.renderOrder = 1;
-  scene.add(shadowMesh);
-}
+// (Soft contact shadow blob removed — was a transparent radial-gradient
+// quad parked at the tree base. Duplicated work the proper directional
+// shadow map already does, and its polygonOffset was bleeding a dark
+// strip onto the bottom of every vertical mesh. The cyc backdrop's
+// receiveShadow + the tree's castShadow handle ground darkening now.)
 
 // --- Scale-reference human silhouette (1.8 m) --------------------------
 // A flat outline of a person, placed ~3 m from the tree base so you can
