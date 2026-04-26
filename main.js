@@ -2899,6 +2899,50 @@ function generateBarkThumbnail(style, size = 48) {
   return cv;
 }
 
+// Greyscale thumbnail of a single noise pattern at native frequency. Used
+// by the per-layer pattern picker so the user can see what each pattern
+// looks like at a glance. Cached forever.
+const _NOISE_THUMB_CACHE = new Map();
+function generateNoiseThumbnail(patternName, size = 48) {
+  const key = patternName + ':' + size;
+  const cached = _NOISE_THUMB_CACHE.get(key);
+  if (cached) return cached;
+  const factory = NOISE_PATTERNS[patternName] || NOISE_PATTERNS.value;
+  // Period = 6 reads as "patches" at 48² — chunky enough that ridged /
+  // worley / warp show their character clearly. Same period across
+  // patterns so visual differences are pattern-driven, not scale-driven.
+  const noise = factory(7, 6);
+  const cv = document.createElement('canvas');
+  cv.width = size; cv.height = size;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const data = img.data;
+  for (let y = 0; y < size; y++) {
+    const v = y / size;
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      // Worley returns distance — invert so feature points read bright
+      // (more visually interesting than dark spots on grey).
+      let n = noise(u, v);
+      if (patternName === 'worley') n = 1 - n;
+      const c = Math.max(0, Math.min(255, n * 255));
+      const o = (y * size + x) * 4;
+      data[o    ] = c;
+      data[o + 1] = c;
+      data[o + 2] = c;
+      data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  _NOISE_THUMB_CACHE.set(key, cv);
+  return cv;
+}
+
+const THUMBNAIL_FACTORIES = {
+  barkPreset: generateBarkThumbnail,
+  noise:      generateNoiseThumbnail,
+};
+
 // --- Wind (TSL vertex displacement) --------------------------------------
 // Two independent enables. Leaves can keep swaying via the shader even when
 // the bark is being driven by the CPU skeleton sim (during a grab interaction
@@ -8601,10 +8645,13 @@ function createThumbnailRow(p, getter, setter, onAfter) {
     btn.className = 'thumbnail';
     btn.dataset.value = opt;
     if (opt === active) btn.classList.add('active');
-    // Render the thumbnail synchronously — at 48² it costs <2ms per preset
-    // and the cache hits forever after.
+    // Render the thumbnail synchronously — at 48² it costs <2ms per
+    // option and the cache hits forever after. Factory chosen by
+    // p.thumbKind ('barkPreset' for full bark swatches, 'noise' for the
+    // per-layer pattern picker greyscale).
+    const factory = THUMBNAIL_FACTORIES[p.thumbKind] || THUMBNAIL_FACTORIES.barkPreset;
     let canvas = null;
-    try { canvas = generateBarkThumbnail(opt, 48); } catch {}
+    try { canvas = factory(opt, 48); } catch {}
     if (canvas) {
       canvas.classList.add('thumbnail-canvas');
       btn.appendChild(canvas);
@@ -9929,6 +9976,11 @@ buildParamGroup('Leaf Material');
   // Color pickers for fill + veins.
   const colorRow = document.createElement('div');
   colorRow.className = 'leaf-color-row';
+  // Track each picker's input so external state changes (species switch,
+  // snapshot restore, history undo) can sync the swatch back to P.leafProfile.
+  // Without this, picking Cherry leaves the picker stuck on the previous
+  // species' colour even though the live texture re-bakes correctly.
+  const _colorInputs = {};
   const mkColor = (label, key) => {
     const lab = document.createElement('label');
     lab.className = 'leaf-color';
@@ -9936,7 +9988,7 @@ buildParamGroup('Leaf Material');
     txt.textContent = label;
     const inp = document.createElement('input');
     inp.type = 'color';
-    inp.value = P.leafProfile[key];
+    inp.value = P.leafProfile[key] || (key === 'color' ? '#4a7a3a' : '#2f4a22');
     inp.addEventListener('input', () => {
       P.leafProfile[key] = inp.value;
       applyLeafShape();
@@ -9944,10 +9996,15 @@ buildParamGroup('Leaf Material');
       render3DPreview();
       markRenderDirty(2);
     });
+    _colorInputs[key] = inp;
     lab.append(txt, inp);
     return lab;
   };
   colorRow.append(mkColor('Color', 'color'), mkColor('Vein', 'veinColor'));
+  const _syncLeafColorPickers = () => {
+    if (_colorInputs.color)     _colorInputs.color.value     = P.leafProfile.color     || '#4a7a3a';
+    if (_colorInputs.veinColor) _colorInputs.veinColor.value = P.leafProfile.veinColor || '#2f4a22';
+  };
   // Color picker is shared across every procedural shape (Oak, Maple, …,
   // Custom) — hidden only for Texture / Upload modes which bring their own
   // image. Attached to `wrap` (not `customWrap`) so it stays visible.
