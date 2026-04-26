@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r14';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r14';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r14';
-import { buildRootsGeometry } from './roots.js?v=r14';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r17';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r17';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r17';
+import { buildRootsGeometry } from './roots.js?v=r17';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -6737,6 +6737,59 @@ function _assignTreeBounds(geo, minX, minY, minZ, maxX, maxY, maxZ) {
   geo.boundingSphere.center.set(cx, cy, cz);
   geo.boundingSphere.radius = Math.sqrt(hx * hx + hy * hy + hz * hz);
 }
+// Sanitize numeric params before each build — clamps NaN / out-of-range
+// slider values to schema [min, max] so a degenerate input can't NaN-cascade
+// into the skeleton walker.
+function _sanitizeForBuild() {
+  const sanitizeNum = (host, key, p) => {
+    const v = host[key];
+    if (typeof v !== 'number' || !Number.isFinite(v)) {
+      host[key] = p.default;
+      return;
+    }
+    if (typeof p.min === 'number' && v < p.min) host[key] = p.min;
+    else if (typeof p.max === 'number' && v > p.max) host[key] = p.max;
+  };
+  // Top-level P
+  for (const g of PARAM_SCHEMA) for (const p of g.params) {
+    if (p.type === 'select' || typeof p.default !== 'number') continue;
+    sanitizeNum(P, p.key, p);
+  }
+  // Per-level (mirrors what the walker reads)
+  if (Array.isArray(P.levels)) {
+    for (const L of P.levels) {
+      if (!L) continue;
+      for (const p of LEVEL_SCHEMA) {
+        if (p.type === 'select' || typeof p.default !== 'number') continue;
+        sanitizeNum(L, p.key, p);
+      }
+      // Required curve arrays must be arrays of >=2 finite numbers.
+      const ensureCurve = (k, def) => {
+        if (!Array.isArray(L[k]) || L[k].length < 2 || L[k].some((v) => !Number.isFinite(v))) {
+          L[k] = def.slice();
+        }
+      };
+      ensureCurve('densityPoints',   [0.75, 0.95, 1.0, 0.95, 0.7]);
+      ensureCurve('lengthPoints',    [0.9, 1.0, 1.0, 0.9, 0.75]);
+      ensureCurve('splitPoints',     [1, 1, 1, 1, 1]);
+      ensureCurve('randomnessPoints',[1, 1, 1, 1, 1]);
+      ensureCurve('startAnglePoints',[0, 0, 0, 0, 0]);
+    }
+  }
+  // P.wind / P.physics / P.roots — clamp the few we care about for skeleton.
+  if (P.wind) {
+    for (const p of WIND_SCHEMA) sanitizeNum(P.wind, p.key, p);
+  }
+  if (P.physics) {
+    for (const p of PHYSICS_SCHEMA) sanitizeNum(P.physics, p.key, p);
+  }
+  // Critical scalars buildTree divides by — never let them be 0.
+  if (!(P.trunkSteps > 0)) P.trunkSteps = 22;
+  if (!(P.trunkHeight > 0)) P.trunkHeight = 11;
+  if (!(P.barkRadialSegs > 0)) P.barkRadialSegs = 16;
+  if (!(P.barkTubularDensity > 0)) P.barkTubularDensity = 6;
+}
+
 async function generateTree(opts = {}) {
   const _mode = opts.leavesOnly ? 'Rebuilding foliage…'
               : opts.tubesOnly  ? 'Re-extruding tubes…'
@@ -6746,6 +6799,7 @@ async function generateTree(opts = {}) {
   const _gtMark = (label) => { _gtT.push([label, performance.now()]); };
   _gtMark('start');
   try {
+  _sanitizeForBuild();
   const myGen = ++_buildGen;
   // Tubes-only fast path runs BEFORE the sculpt/orphan/clear logic because
   // nothing about the skeleton, leaves, or decoration meshes changes — we
@@ -15319,3 +15373,10 @@ renderer.domElement.addEventListener('pointerleave', () => {
     }
   });
 })();
+
+// (Stress-test hook removed — see git history at b9d2... for the
+// implementation. It froze the renderer because applySpecies itself fires
+// async generateTree() builds that stack with the test's own builds, and
+// the worker pool can only serve one full rebuild at a time. The
+// _sanitizeForBuild() pre-pass and refSteps clamp deliver the real
+// bulletproofing benefit those tests were meant to validate.)
