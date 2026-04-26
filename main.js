@@ -5095,7 +5095,17 @@ function _applyBranchWobble(root, nodes, P) {
     const n2 = fbm3D(wxN + 47.3, wyN + 13.7, wzN + 91.1) * 2 - 1;
     const lvlIdx = (lvl ?? 0);
     const depthScale = 0.6 + lvlIdx * 0.35;
-    const wMul = lvlAmt * depthScale * 0.12;
+    let wMul = lvlAmt * depthScale * 0.12;
+    // Trunk nodes near the floor must NOT wobble — otherwise the chain's
+    // first node drifts off the y-axis, the CatmullRom tangent at root
+    // tilts, and the bottom tube ring lifts off the ground. Smooth ramp:
+    // 0 at trunk base, full by 15 % of trunkHeight. Branch nodes
+    // (branchLevel set / not isTrunk) wobble at full strength as before.
+    if (n.isTrunk || n.branchLevel === undefined) {
+      const yFrac = oY[i] / Math.max(0.1, P.trunkHeight ?? 10);
+      const _u = Math.max(0, Math.min(1, yFrac / 0.15));
+      wMul *= _u * _u * (3 - 2 * _u);
+    }
     n.pos.x += (ax * n1 + bx * n2) * wMul;
     n.pos.y += (ay * n1 + by * n2) * wMul;
     n.pos.z += (az * n1 + bz * n2) * wMul;
