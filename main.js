@@ -2262,25 +2262,72 @@ function applyTheme(name) {
 // eyeball how big the tree actually is. Toggled via the left toolbar.
 let personRefMesh = null;
 {
-  // Hand-drawn silhouette path in a 0..1.8 m Y, -0.35..0.35 m X coordinate
-  // system. Simple symmetric outline: head, shoulders, torso, legs.
+  // 2D anatomical silhouette in a 0..1.80 m Y, ~±0.27 m X frame
+  // (origin at feet center). Built from quadraticCurveTo segments so the
+  // bezier tessellation produces a smooth high-poly outline (curveSegments
+  // verts per curve) instead of the previous 32-point chunky polyline.
+  // Continuous front-view path: top of head -> right shoulder/arm/hand ->
+  // up inside arm -> right side of torso -> right leg -> right foot ->
+  // crotch -> left foot -> left leg -> torso -> left arm -> left shoulder
+  // -> left side of head -> close at top.
   const shape = new THREE.Shape();
-  const pts = [
-    [-0.05, 1.78], [-0.11, 1.72], [-0.14, 1.65], [-0.14, 1.58], [-0.10, 1.52], // head L
-    [-0.18, 1.48], [-0.28, 1.42], [-0.30, 1.30],                                 // shoulder L
-    [-0.18, 1.22], [-0.17, 1.00], [-0.18, 0.85],                                 // torso L
-    [-0.12, 0.80], [-0.11, 0.55], [-0.12, 0.05], [-0.05, 0.00],                   // leg L
-    [-0.02, 0.45], [ 0.02, 0.45],                                                // inseam
-    [ 0.05, 0.00], [ 0.12, 0.05], [ 0.11, 0.55], [ 0.12, 0.80],                   // leg R
-    [ 0.18, 0.85], [ 0.17, 1.00], [ 0.18, 1.22],                                 // torso R
-    [ 0.30, 1.30], [ 0.28, 1.42], [ 0.18, 1.48],                                 // shoulder R
-    [ 0.10, 1.52], [ 0.14, 1.58], [ 0.14, 1.65], [ 0.11, 1.72], [ 0.05, 1.78],    // head R
-    [ 0.00, 1.80],
-  ];
-  shape.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0], pts[i][1]);
+  shape.moveTo(0, 1.80);
+  // --- Right side --------------------------------------------------------
+  // Head: smooth oval, jaw curve to chin/neck
+  shape.quadraticCurveTo(0.140, 1.795, 0.140, 1.66);
+  shape.quadraticCurveTo(0.135, 1.555, 0.070, 1.520);
+  // Neck (slightly tapered)
+  shape.lineTo(0.060, 1.480);
+  // Shoulder slope outward to deltoid
+  shape.quadraticCurveTo(0.140, 1.475, 0.235, 1.460);
+  // Outside of right arm — bicep bulge then taper to wrist
+  shape.quadraticCurveTo(0.265, 1.300, 0.235, 1.050);
+  shape.quadraticCurveTo(0.215, 0.850, 0.210, 0.720);
+  // Right hand (curl at hip level)
+  shape.quadraticCurveTo(0.215, 0.660, 0.185, 0.650);
+  shape.quadraticCurveTo(0.150, 0.650, 0.145, 0.700);
+  // Inside of right arm back up to armpit
+  shape.quadraticCurveTo(0.140, 0.850, 0.140, 1.050);
+  shape.lineTo(0.140, 1.300);
+  // Right side of torso: subtle waist tuck + hip flare
+  shape.quadraticCurveTo(0.130, 1.100, 0.142, 0.950);
+  shape.quadraticCurveTo(0.180, 0.920, 0.180, 0.880);
+  // Outside of right thigh -> knee -> calf -> ankle
+  shape.quadraticCurveTo(0.165, 0.620, 0.142, 0.350);
+  shape.quadraticCurveTo(0.125, 0.130, 0.112, 0.040);
+  // Right foot (toe out then heel)
+  shape.lineTo(0.160, 0.010);
+  shape.lineTo(0.180, 0.000);
+  shape.lineTo(0.040, 0.000);
+  shape.lineTo(0.040, 0.040);
+  // Inside of right leg up to crotch
+  shape.quadraticCurveTo(0.045, 0.350, 0.030, 0.640);
+  shape.quadraticCurveTo(0.020, 0.820, 0.000, 0.860);
+  // --- Left side (mirror) ------------------------------------------------
+  shape.quadraticCurveTo(-0.020, 0.820, -0.030, 0.640);
+  shape.quadraticCurveTo(-0.045, 0.350, -0.040, 0.040);
+  shape.lineTo(-0.040, 0.000);
+  shape.lineTo(-0.180, 0.000);
+  shape.lineTo(-0.160, 0.010);
+  shape.lineTo(-0.112, 0.040);
+  shape.quadraticCurveTo(-0.125, 0.130, -0.142, 0.350);
+  shape.quadraticCurveTo(-0.165, 0.620, -0.180, 0.880);
+  shape.quadraticCurveTo(-0.180, 0.920, -0.142, 0.950);
+  shape.quadraticCurveTo(-0.130, 1.100, -0.140, 1.300);
+  shape.lineTo(-0.140, 1.050);
+  shape.quadraticCurveTo(-0.140, 0.850, -0.145, 0.700);
+  shape.quadraticCurveTo(-0.150, 0.650, -0.185, 0.650);
+  shape.quadraticCurveTo(-0.215, 0.660, -0.210, 0.720);
+  shape.quadraticCurveTo(-0.215, 0.850, -0.235, 1.050);
+  shape.quadraticCurveTo(-0.265, 1.300, -0.235, 1.460);
+  shape.quadraticCurveTo(-0.140, 1.475, -0.060, 1.480);
+  shape.lineTo(-0.070, 1.520);
+  shape.quadraticCurveTo(-0.135, 1.555, -0.140, 1.660);
+  shape.quadraticCurveTo(-0.140, 1.795, 0, 1.80);
   shape.closePath();
-  const geo = new THREE.ShapeGeometry(shape);
+  // curveSegments 24 — bezier resolution per quadraticCurveTo. Default 12
+  // gives faceted shoulders/calves at 1.8 m; 24 reads as smooth.
+  const geo = new THREE.ShapeGeometry(shape, 24);
   const mat = new THREE.MeshBasicMaterial({
     color: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
     depthTest: true, toneMapped: false,
@@ -2330,54 +2377,52 @@ for (const t of [_barkImgAlbedo, _barkImgNormal]) {
 // patterns (perfectly periodic by construction).
 const _BARK_TEX_CACHE = new Map();
 
+// Frequencies tuned for a default 0.5 tiles/m repeat = 2 m per tile. With
+// e.g. oak's vertFreq 4 that lands ~2 fissures per metre of trunk (50 cm
+// apart), which reads as proper hardwood bark at 5-15 m camera distance
+// instead of fine-grain noise.
 const BARK_STYLES = {
   oak: {
-    // Deep vertical fissures, blocky scales, brown-grey palette.
-    vertFreq: 8, vertSharp: 6, vertWobble: 0.05, vertDepth: 0.45,
-    horizFreq: 12, horizSharp: 1, horizAmp: 0.12,
-    largeFreq: 2, largeAmp: 0.18,
-    microFreq: 60, microAmp: 0.06,
+    vertFreq: 4, vertSharp: 6, vertWobble: 0.05, vertDepth: 0.45,
+    horizFreq: 6, horizSharp: 1, horizAmp: 0.12,
+    largeFreq: 1.5, largeAmp: 0.20,
+    microFreq: 28, microAmp: 0.06,
     palette: [[36, 28, 20], [88, 72, 55], [148, 130, 105]],
     normalStrength: 4.5,
     grain: 6,
   },
   pine: {
-    // Big overlapping plates, reddish-brown.
-    vertFreq: 5, vertSharp: 1.5, vertWobble: 0.12, vertDepth: 0.30,
-    horizFreq: 7, horizSharp: 3, horizAmp: 0.42,
-    largeFreq: 1.5, largeAmp: 0.20,
-    microFreq: 40, microAmp: 0.05,
+    vertFreq: 2.5, vertSharp: 1.5, vertWobble: 0.12, vertDepth: 0.32,
+    horizFreq: 3.5, horizSharp: 3, horizAmp: 0.45,
+    largeFreq: 1.2, largeAmp: 0.22,
+    microFreq: 22, microAmp: 0.05,
     palette: [[48, 28, 18], [115, 75, 48], [175, 130, 88]],
     normalStrength: 3.5,
     grain: 5,
   },
   birch: {
-    // Papery white with sharp horizontal lenticels and faint peeling
-    // patches via large-scale noise.
     vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
-    horizFreq: 50, horizSharp: 16, horizAmp: 0.50,
-    largeFreq: 2.5, largeAmp: 0.30,
-    microFreq: 28, microAmp: 0.025,
+    horizFreq: 22, horizSharp: 16, horizAmp: 0.50,
+    largeFreq: 2, largeAmp: 0.30,
+    microFreq: 18, microAmp: 0.025,
     palette: [[35, 30, 26], [205, 200, 192], [242, 240, 234]],
     normalStrength: 0.9,
     grain: 4,
   },
   cherry: {
-    // Smooth red-brown with thin lenticel rings.
     vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
-    horizFreq: 70, horizSharp: 6, horizAmp: 0.20,
-    largeFreq: 3, largeAmp: 0.18,
-    microFreq: 35, microAmp: 0.04,
+    horizFreq: 28, horizSharp: 6, horizAmp: 0.20,
+    largeFreq: 2.5, largeAmp: 0.18,
+    microFreq: 20, microAmp: 0.04,
     palette: [[55, 30, 22], [108, 60, 45], [158, 100, 78]],
     normalStrength: 1.4,
     grain: 4,
   },
   smooth: {
-    // Beech / olive — gentle gradient with patchy variation.
     vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
     horizFreq: 0, horizSharp: 0, horizAmp: 0,
-    largeFreq: 2.5, largeAmp: 0.28,
-    microFreq: 30, microAmp: 0.04,
+    largeFreq: 2, largeAmp: 0.30,
+    microFreq: 18, microAmp: 0.04,
     palette: [[110, 105, 98], [165, 160, 152], [205, 200, 192]],
     normalStrength: 0.7,
     grain: 4,
@@ -2412,6 +2457,13 @@ function _makeTilableNoise(seed, period) {
   };
 }
 
+// Returns { albedoCanvas, normalCanvas } — raw HTMLCanvasElements. The
+// caller (applyBarkStyle) keeps a single THREE.CanvasTexture object for
+// each map and swaps the canvas via `.image` so the bark shader's TSL
+// binding stays valid across style changes. Earlier builds returned new
+// CanvasTextures every call, which orphaned the shader's binding to the
+// first texture and produced "stuck" pattern artefacts when switching
+// styles or rotating.
 function generateBarkTexture(style = 'oak', seed = 1) {
   const key = style + ':' + seed;
   const cached = _BARK_TEX_CACHE.get(key);
@@ -2419,7 +2471,7 @@ function generateBarkTexture(style = 'oak', seed = 1) {
 
   const p = BARK_STYLES[style] || BARK_STYLES.oak;
   const N = 512;
-  let albedoTex, normalTex;
+  let aCanvas = null, nCanvas = null;
 
   try {
     // Tilable noise — pre-built grids at multiple scales.
@@ -2470,7 +2522,7 @@ function generateBarkTexture(style = 'oak', seed = 1) {
     }
 
     // Albedo — three-stop palette interpolated by height.
-    const aCanvas = document.createElement('canvas');
+    aCanvas = document.createElement('canvas');
     aCanvas.width = N; aCanvas.height = N;
     const aCtx = aCanvas.getContext('2d');
     const aImg = aCtx.createImageData(N, N);
@@ -3423,20 +3475,45 @@ function applyBarkMaterial() {
   applyBarkStyle();
   const hue = P.barkHue ?? 0.08;
   const tint = P.barkTint ?? 0;
+  const brightness = P.barkBrightness ?? 1.0;
+  const saturation = P.barkSaturation ?? 1.0;
   _barkTint.setHSL(hue, 0.5, 0.5);
   // barkMat.color is now baked into the colorNode's tint uniform instead
   // (we override colorNode). Drive the uniform; keep m.color in sync for fallbacks.
+  // Final tint = white→hue (by tint amount) × brightness, with saturation
+  // applied as a luminance-preserving lerp from grey toward the tinted RGB.
   _mossTint.value.setRGB(1, 1, 1).lerp(_barkTint, tint);
+  if (saturation !== 1.0) {
+    // Standard luminance, then mix grey↔color by `saturation`. <1 = mute,
+    // >1 = punch. Clamp to non-negative to avoid colour inversion.
+    const c = _mossTint.value;
+    const lum = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+    c.r = Math.max(0, lum + (c.r - lum) * saturation);
+    c.g = Math.max(0, lum + (c.g - lum) * saturation);
+    c.b = Math.max(0, lum + (c.b - lum) * saturation);
+  }
+  if (brightness !== 1.0) _mossTint.value.multiplyScalar(brightness);
   barkMat.color.copy(_mossTint.value);
   barkMat.roughness = P.barkRoughness ?? 0.95;
   const ns = P.barkNormalStrength ?? 1.0;
   if (barkMat.normalScale) barkMat.normalScale.set(ns, ns);
   // su = tiles/m along trunk (→ repeat.x since uv.x = meters along)
   // sv = tiles/m around trunk (→ repeat.y since uv.y = meters around)
-  const su = P.barkTexScaleU ?? 1.5;
-  const sv = P.barkTexScaleV ?? 1.5;
-  if (barkAlbedo) barkAlbedo.repeat.set(su, sv);
-  if (barkNormal) barkNormal.repeat.set(su, sv);
+  const su = P.barkTexScaleU ?? 0.5;
+  const sv = P.barkTexScaleV ?? 0.5;
+  // Texture rotation in radians around the (0.5, 0.5) UV centre. THREE
+  // applies this matrix-side, no regen — pure GPU-side.
+  const rot = (P.barkRotation ?? 0) * (Math.PI / 180);
+  if (barkAlbedo) {
+    barkAlbedo.repeat.set(su, sv);
+    barkAlbedo.center.set(0.5, 0.5);
+    barkAlbedo.rotation = rot;
+  }
+  if (barkNormal) {
+    barkNormal.repeat.set(su, sv);
+    barkNormal.center.set(0.5, 0.5);
+    barkNormal.rotation = rot;
+  }
   // Moss blend driven by P.mossAmount / hue / lum / threshold
   _mossAmount.value = P.mossAmount ?? 0;
   _mossThreshold.value = P.mossThreshold ?? 0.35;
@@ -10714,9 +10791,10 @@ addSectionLabel('Bush', 'bush', 'sprout');
 buildBushGroup('Bush Shape');
 buildBushGroup('Bush Foliage');
 
-// 6. Bark — surface / shading
+// 6. Bark — procedural style picker + surface / shading material card
 addSectionLabel('Bark', null, 'layers');
-buildParamGroup('Bark');
+buildParamGroup('Bark Style');
+buildParamGroup('Bark Material');
 
 // 7. Scene — lighting preset
 addSectionLabel('Scene', null, 'sun');
