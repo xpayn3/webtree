@@ -514,9 +514,13 @@ export const SPECIES = {
     globalScale: 0.9,
     shape: 'free', baseSize: 0.45,
     leafShape: 'Lanceolate',
-    leafSize: 0.08, leafSpread: 0.3, leafStemLen: 0, leafStemAngle: 0.5, leafTilt: 0.18,
-    leavesPerTip: 22, leafChainSteps: 6, leavesStart: 0.3, season: 0.5,
-    leafClusterSize: 5, leafClusterSpread: 0.7,
+    // Real Acacia has bipinnate compound leaves — many tiny leaflets per leaf.
+    // We don't render compound leaves, so each Lanceolate leaf must stand in
+    // for a whole frond. Cranked size + density well above other broadleaf
+    // species so the umbrella crown actually reads as foliage, not bare twigs.
+    leafSize: 0.28, leafSpread: 0.4, leafStemLen: 0.02, leafStemAngle: 0.5, leafTilt: 0.18,
+    leavesPerTip: 38, leafChainSteps: 8, leavesStart: 0.2, season: 0.5,
+    leafClusterSize: 6, leafClusterSpread: 0.85, leafMaxRadius: 0.22,
     leafPhyllotaxis: 'alternate',
     pruneMode: 'off',
     levels: [
