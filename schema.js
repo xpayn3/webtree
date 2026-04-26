@@ -608,6 +608,12 @@ export const SPECIES = {
     // reject every frond and the crown would render bare.
     leafSize: 0.6, leafDroop: 0.85, leafFacing: 0.15, leafStemLen: 0.02, leafStemAngle: 0.2, leafTilt: 0.25,
     leafMaxRadius: 0.6,
+    // Palm fronds need an aggressive lengthwise curl + side cup so each
+    // leaf bends like a real palm leaf, not a flat lance. We already build
+    // a curved 8-row strip in rebuildLeafGeo — defaults of 0.08/0.15 read
+    // as flat at frond scale; cranking these is what makes the silhouette
+    // recognizable.
+    leafApexCurl: 0.38, leafMidribCurl: 0.45,
     leavesPerTip: 32, leafChainSteps: 8, leavesStart: 0.5, season: 0.2,
     leafClusterSize: 4, leafClusterSpread: 0.6,
     leafPhyllotaxis: 'spiral',
