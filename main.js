@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r3';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r3';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r3';
-import { buildRootsGeometry } from './roots.js?v=r3';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r4';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r4';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r4';
+import { buildRootsGeometry } from './roots.js?v=r4';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -1520,7 +1520,7 @@ async function buildTreeAndTubesViaWorker(profilePoints, taperPoints, isScrubbin
       tipRadius: P.tipRadius, baseRadius: P.baseRadius, taperExp: P.taperExp,
       alloExp: P.alloExp, branchThickness: P.branchThickness,
       minLen: P.minLen, growthPhase: P.growthPhase, goldenRoll: P.goldenRoll, globalScale: P.globalScale,
-      branchModel: P.branchModel,
+      branchModel: P.branchModel, hondaR1: P.hondaR1, hondaR2: P.hondaR2,
       // Crown silhouette + clean-bole fraction. Previously omitted from the
       // worker payload, so worker-built trees silently defaulted to 'free'
       // (no shape envelope) and baseSize=0 (no clean bole). That broke the
@@ -3775,9 +3775,14 @@ function buildTree(nodesOut) {
       // Weber-Penn leaves lenRatio as-is.
       let hondaMul = 1;
       if (_branchModel === 'honda') {
-        hondaMul = isApicalChild ? 0.94 : (c === 0 ? 0.86 : 0.70);
+        const _r1 = P.hondaR1 ?? 0.94; // apical / straight continuation
+        const _r2 = P.hondaR2 ?? 0.86; // first lateral
+        hondaMul = isApicalChild ? _r1 : (c === 0 ? _r2 : _r2 * 0.81);
       }
-      const childLen = parentLen * L.lenRatio * apicalLenMul * signalVigor * shapeMul * lenMul * apicalLenBoost * hondaMul;
+      // apicalDominance scaling shouldn't apply to the apical-continuation
+      // child — that child is the leader and gets its own apicalLenBoost.
+      const _apicalLenMulEff = isApicalChild ? 1 : apicalLenMul;
+      const childLen = parentLen * L.lenRatio * _apicalLenMulEff * signalVigor * shapeMul * lenMul * apicalLenBoost * hondaMul;
       // Bridge node — ALWAYS inserted, not just when refCurve is present.
       // buildChains identifies branch-starts by `chainRoot`; without this
       // flag, lateral chains at L2/L3/L4 were being treated as "extra
@@ -5585,6 +5590,19 @@ function stepSim(dt, t) {
     }
   }
 
+  // Fatigue: gradually drift the rest pose toward the current deformed pose.
+  // Makes RMB grab-and-bend feel permanent — without it the branch springs
+  // straight back when released.
+  const fatigue = ph.fatigue ?? 0;
+  if (fatigue > 0 && skRestX) {
+    const k = Math.min(1, fatigue * dt);
+    for (let i = 0; i < skRestX.length; i++) {
+      skRestX[i] += (skPosX[i] - skRestX[i]) * k;
+      skRestY[i] += (skPosY[i] - skRestY[i]) * k;
+      skRestZ[i] += (skPosZ[i] - skRestZ[i]) * k;
+    }
+  }
+
   // Mirror SoA state back into skeleton[] objects so non-hot readers
   // (leaf/stem instance updates, picking, reframe) see the fresh pose.
   _skeletonSoAToObjects();
@@ -5913,6 +5931,13 @@ function reframeToTree() {
 // Derive broadleaf-style levels + leaf params from the conifer schema.
 // Called inside generateTree when treeType === 'conifer' so the shared
 // tree-building engine produces a conical pine/spruce/cedar.
+//
+// **WARNING: this REPLACES P.levels every regen.** Manual edits to the
+// Level-1/Level-2 cards on a conifer tree are clobbered the next time the
+// tree rebuilds. To affect conifer shape, edit the cBranch* / cTwig* sliders
+// in the Conifer Shape sidebar — those values feed into the levels here.
+// To customize beyond the conifer schema, switch treeType away from
+// 'conifer' and edit P.levels directly.
 function applyConiferConfigToP() {
   // Primary whorl-ish branches along the trunk + short twigs.
   // Conifer branches are thinner at the trunk attachment than broadleaf and

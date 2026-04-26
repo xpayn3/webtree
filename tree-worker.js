@@ -593,9 +593,12 @@ function buildTreeWorker(state) {
       // Honda R1/R2 length ratios when branch formula = 'honda'.
       let hondaMul = 1;
       if (_branchModel === 'honda') {
-        hondaMul = isApicalChild ? 0.94 : (c === 0 ? 0.86 : 0.70);
+        const _r1 = P.hondaR1 ?? 0.94;
+        const _r2 = P.hondaR2 ?? 0.86;
+        hondaMul = isApicalChild ? _r1 : (c === 0 ? _r2 : _r2 * 0.81);
       }
-      const childLen = parentLen * L.lenRatio * apicalLenMul * signalVigor * shapeMul * _lenProfMul * apicalLenBoost * hondaMul;
+      const _apicalLenMulEff = isApicalChild ? 1 : apicalLenMul;
+      const childLen = parentLen * L.lenRatio * _apicalLenMulEff * signalVigor * shapeMul * _lenProfMul * apicalLenBoost * hondaMul;
       // Always insert a chainRoot bridge so buildChains identifies this as a
       // branch start and tubeFromChain applies the junction flare + pad.
       const bridge = new _TNode(sp.pos, sp.node);

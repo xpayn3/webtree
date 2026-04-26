@@ -204,6 +204,12 @@ export const PARAM_SCHEMA = [
     // phyllotaxis (137.5°).
     { key: 'branchModel',  label: 'Branch formula', type: 'select',
       options: ['weber-penn', 'honda', 'fibonacci'], default: 'weber-penn' },
+    // Honda R1 / R2 length ratios (1971). Only consulted when
+    // branchModel === 'honda'. R1 = apical/straight continuation length
+    // multiplier, R2 = first-lateral length multiplier; later laterals are
+    // scaled R2 × 0.81 to mimic Honda's diminishing side-branch length.
+    { key: 'hondaR1',      label: 'Honda R1',      min: 0.5, max: 1.2, step: 0.01, default: 0.94 },
+    { key: 'hondaR2',      label: 'Honda R2',      min: 0.4, max: 1.0, step: 0.01, default: 0.86 },
     { key: 'baseSize',     label: 'Clean bole',    min: 0,   max: 0.6, step: 0.02, default: 0    },
     { key: 'minLen',       label: 'Min length',    min: 0.1, max: 0.6, step: 0.02, default: 0.28 },
     { key: 'growthPhase',  label: 'Growth',        min: 0.1, max: 1,   step: 0.02, default: 1, hidden: true },
@@ -327,6 +333,11 @@ export const PHYSICS_SCHEMA = [
   { key: 'damping',         label: 'Damping',      min: 0.1, max: 3.0, step: 0.05, default: 1.0 },
   { key: 'windResponse',    label: 'Wind Resp.',   min: 0,   max: 3.0, step: 0.05, default: 1.0 },
   { key: 'massiveness',     label: 'Mass',         min: 0.3, max: 3.0, step: 0.05, default: 1.0 },
+  // Fatigue — rest pose drifts toward current deformed pose at this rate
+  // (per-second blend coefficient). 0 = no fatigue (springs back fully);
+  // higher = grabbed bends become permanent faster. 0.5 ≈ ~half permanent
+  // after ~1.4 s of holding.
+  { key: 'fatigue',         label: 'Fatigue',      min: 0,   max: 4,   step: 0.05, default: 0   },
   // Grab-and-pull interaction
   { key: 'grabPickRadius',  label: 'Pick radius',  min: 10,  max: 150, step: 5,    default: 60  },
   { key: 'grabSensitivity', label: 'Sensitivity',  min: 0.2, max: 3.0, step: 0.05, default: 1.0 },
