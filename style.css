@@ -2540,8 +2540,9 @@ body.bake-mode #axis-gizmo {
 }
 
 /* Colour-swatch scrubbers (hue / saturation / brightness): the gradient on
-   the track does the visual heavy lifting. Drop the white-wash fill and
-   keep just a right-edge indicator so position reads cleanly. */
+   the track does the visual heavy lifting; the fill becomes a bold thumb
+   marker (white pill with dark outline) so the cursor position reads
+   instantly against any colour the gradient happens to be at. */
 #sidebar .scrubber.swatch-hue,
 #sidebar .scrubber.swatch-color {
   background: rgba(0, 0, 0, 0.25);  /* dark frame so light gradients still read */
@@ -2549,18 +2550,31 @@ body.bake-mode #axis-gizmo {
 #sidebar .scrubber.swatch-hue .scrubber-fill,
 #sidebar .scrubber.swatch-color .scrubber-fill {
   background: transparent;
-  border-right: 1px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  border-right: none;
+  /* Marker = a fat white-cored bar at the right-inside edge of the fill,
+     sandwiched in black so it pops over any gradient colour underneath.
+     Inset shadows aren't clipped by the track's overflow:hidden the way
+     outset shadows are, so the marker stays visible at any value. */
+  box-shadow:
+    inset -2px 0 0 0 #fff,
+    inset -4px 0 0 0 rgba(0, 0, 0, 0.9),
+    inset -6px 0 0 0 rgba(255, 255, 255, 0.4);
 }
 #sidebar .scrubber.swatch-hue:hover .scrubber-fill,
 #sidebar .scrubber.swatch-color:hover .scrubber-fill {
   background: transparent;
-  border-right: 1px solid #fff;
+  box-shadow:
+    inset -3px 0 0 0 #fff,
+    inset -5px 0 0 0 rgba(0, 0, 0, 0.95),
+    inset -7px 0 0 0 rgba(255, 255, 255, 0.5);
 }
 #sidebar .scrubber.swatch-hue.dragging .scrubber-fill,
 #sidebar .scrubber.swatch-color.dragging .scrubber-fill {
   background: transparent;
-  border-right: 2px solid #fff;
+  box-shadow:
+    inset -3px 0 0 0 var(--accent),
+    inset -5px 0 0 0 #fff,
+    inset -7px 0 0 0 rgba(0, 0, 0, 0.95);
 }
 /* Subtle text shadow so the label/value stays legible over bright gradients */
 #sidebar .scrubber.swatch-hue .scrubber-overlay,
