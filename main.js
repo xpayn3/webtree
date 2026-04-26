@@ -8516,10 +8516,14 @@ function _forceEndAllScrubs() {
     renderer.shadowMap.needsUpdate = true;
   }
 }
-function fmt(v, step) {
-  if (Number.isInteger(step)) return String(Math.round(v));
-  const digits = step < 0.01 ? 3 : step < 0.1 ? 2 : 1;
-  return v.toFixed(digits);
+function fmt(v, step, unit) {
+  let s;
+  if (Number.isInteger(step)) s = String(Math.round(v));
+  else {
+    const digits = step < 0.01 ? 3 : step < 0.1 ? 2 : 1;
+    s = v.toFixed(digits);
+  }
+  return unit ? s + unit : s;
 }
 function createSliderRow(p, getter, setter, onAfter, opts) {
   if (p.type === 'select') return createSelectRow(p, getter, setter, onAfter);
@@ -8610,7 +8614,7 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   const name = document.createElement('span');
   name.className = 'name'; name.textContent = p.label;
   const val = document.createElement('span');
-  val.className = 'val'; val.textContent = fmt(getter(), p.step);
+  val.className = 'val'; val.textContent = fmt(getter(), p.step, p.unit);
   overlay.append(name, val);
   scrubber.appendChild(overlay);
 
@@ -8664,7 +8668,7 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
     // setter sends 1.9 — and consumers using `| 0` then truncate back to 1,
     // so the slider's 'shows 2 but actually 1' bug appears.
     const v = Number.isInteger(p.step) ? Math.round(rawV) : rawV;
-    const text = fmt(v, p.step);
+    const text = fmt(v, p.step, p.unit);
     if (text !== _lastText) { val.textContent = text; _lastText = text; }
     const mod = isModified();
     const modFlipped = (mod !== _lastMod);

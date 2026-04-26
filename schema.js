@@ -46,7 +46,7 @@ export const PARAM_SCHEMA = [
     // Pose — lean angle tilts the trunk base; lean direction is the heading
     // of that tilt. Bow bends the trunk along a subtle S-curve as it grows.
     { key: 'trunkLean',        label: 'Lean',         min: 0,    max: 1.2,  step: 0.01, default: 0 },
-    { key: 'trunkLeanDir',     label: 'Lean dir',     min: 0,    max: 360,  step: 1,    default: 0 },
+    { key: 'trunkLeanDir',     label: 'Lean dir',     min: 0,    max: 360,  step: 1,    default: 0, unit: '°' },
     { key: 'trunkBow',         label: 'Bow',          min: 0,    max: 2,    step: 0.02, default: 0 },
     // Long-wavelength lateral wander applied to the trunk's reference curve
     // only — this is the "ancient/winding" character. Independent of the
@@ -104,7 +104,7 @@ export const PARAM_SCHEMA = [
       options: ['oak', 'pine', 'birch', 'cherry', 'smooth', 'eucalyptus', 'palm', 'redwood'], default: 'oak', live: true },
     { key: 'barkSeed', label: 'Variation seed', min: 1, max: 50, step: 1, default: 1, live: true },
     // ── Fissures (vertical layer) ──
-    { key: 'barkVertFreq',   label: 'Fissure freq',     min: 0,   max: 20,  step: 0.25, default: 4,    live: true },
+    { key: 'barkVertFreq',   label: 'Fissure freq',     min: 0,   max: 20,  step: 1,    default: 4,    live: true },
     { key: 'barkVertSharp',  label: 'Fissure sharp',    min: 0.5, max: 12,  step: 0.5,  default: 6,    live: true },
     { key: 'barkVertDepth',  label: 'Fissure depth',    min: 0,   max: 1,   step: 0.02, default: 0.45, live: true },
     { key: 'barkVertWobble', label: 'Fissure wobble',   min: 0,   max: 0.3, step: 0.01, default: 0.05, live: true },
@@ -115,7 +115,7 @@ export const PARAM_SCHEMA = [
     // ── Detail (patches + micro + grain + bump) ──
     { key: 'barkLargePattern', label: 'Patches pattern', type: 'thumbnails', thumbKind: 'noise',
       options: ['value', 'perlin', 'worley', 'warp'], default: 'value', live: true },
-    { key: 'barkLargeFreq',    label: 'Patches freq',   min: 0, max: 6,   step: 0.1,   default: 1.5,  live: true },
+    { key: 'barkLargeFreq',    label: 'Patches freq',   min: 0, max: 6,   step: 1,     default: 2,    live: true },
     { key: 'barkLargeAmp',     label: 'Patches amount', min: 0, max: 0.6, step: 0.02,  default: 0.20, live: true },
     { key: 'barkMicroPattern', label: 'Micro pattern', type: 'thumbnails', thumbKind: 'noise',
       options: ['value', 'perlin', 'worley', 'ridged'], default: 'value', live: true },
@@ -138,12 +138,12 @@ export const PARAM_SCHEMA = [
     // ── Mapping ──
     { key: 'barkTexScaleU', label: 'Tiles/m along',  min: 0.2, max: 8,  step: 0.1, default: 0.5, live: true },
     { key: 'barkTexScaleV', label: 'Tiles/m around', min: 0.2, max: 8,  step: 0.1, default: 0.5, live: true },
-    { key: 'barkRotation',  label: 'Grain angle',    min: -90, max: 90, step: 1,   default: 0,   live: true },
+    { key: 'barkRotation',  label: 'Grain angle',    min: -90, max: 90, step: 1,   default: 0,   live: true, unit: '°' },
     // ── Moss ──
     { key: 'mossAmount',    label: 'Moss amount',     min: 0,    max: 1,   step: 0.02, default: 0,    live: true },
-    { key: 'mossThreshold', label: 'Moss coverage',   min: 0.1,  max: 0.9, step: 0.02, default: 0.4,  live: true },
+    { key: 'mossThreshold', label: 'Moss threshold',  min: 0.1,  max: 0.9, step: 0.02, default: 0.4,  live: true },
     { key: 'mossHue',       label: 'Moss hue',        min: 0,    max: 1,   step: 0.01, default: 0.3,  live: true, swatch: 'hue' },
-    { key: 'mossLum',       label: 'Moss brightness', min: 0.05, max: 0.6, step: 0.02, default: 0.25, live: true, swatch: 'brightness' },
+    { key: 'mossLum',       label: 'Moss brightness', min: 0.04, max: 0.6, step: 0.02, default: 0.24, live: true, swatch: 'brightness' },
   ]},
   { group: 'Leaves', treeType: 'broadleaf', params: [
     // Quantity & placement.
@@ -203,7 +203,9 @@ export const PARAM_SCHEMA = [
     { key: 'leafBumpScale',       label: 'Vein bump',     min: 0,    max: 0.08,step: 0.002,default: 0.015,live: true, hidden: true },
     { key: 'leafClearcoat',       label: 'Waxy coat',     min: 0,    max: 1,   step: 0.02, default: 0,    live: true, hidden: true },
     { key: 'leafClearcoatRough',  label: 'Coat rough.',   min: 0,    max: 1,   step: 0.02, default: 0.3,  live: true, hidden: true },
-    { key: 'leafSheen',           label: 'Sheen',         min: 0,    max: 1,   step: 0.02, default: 0,    live: true, hidden: true },
+    // (Removed: hidden duplicate `leafSheen` with default 0 used to clobber
+    // the visible 'Wax sheen' default 0.4 because the init loop walks
+    // PARAM_SCHEMA in order and the second declaration won.)
     { key: 'leafBackHue',         label: 'Back hue',      min: 0,    max: 1,   step: 0.01, default: 0.12, live: true, hidden: true },
     { key: 'leafBackLum',         label: 'Back bright.',  min: 0.2,  max: 1,   step: 0.02, default: 0.6,  live: true, hidden: true },
   ]},
@@ -226,7 +228,7 @@ export const PARAM_SCHEMA = [
     { key: 'vineLeafSize',    label: 'Leaf size',    min: 0.1,  max: 1,    step: 0.02,  default: 0.35 },
     { key: 'vineLeafDensity', label: 'Leaf density', min: 0,    max: 40,   step: 1,     default: 12   },
     { key: 'vineHue',         label: 'Hue',          min: 0,    max: 1,    step: 0.01,  default: 0.08, live: true },
-    { key: 'vineLum',         label: 'Brightness',   min: 0.05, max: 0.8,  step: 0.02,  default: 0.28, live: true },
+    { key: 'vineLum',         label: 'Brightness',   min: 0.04, max: 0.8,  step: 0.02,  default: 0.28, live: true },
   ]},
   { group: 'LOD', params: [
     { key: 'lodAutoSwitch', label: 'Auto-switch',  type: 'select', options: ['off', 'on'], default: 'off' },
@@ -254,7 +256,7 @@ export const PARAM_SCHEMA = [
     // scaled R2 × 0.81 to mimic Honda's diminishing side-branch length.
     { key: 'hondaR1',      label: 'Honda R1',      min: 0.5, max: 1.2, step: 0.01, default: 0.94 },
     { key: 'hondaR2',      label: 'Honda R2',      min: 0.4, max: 1.0, step: 0.01, default: 0.86 },
-    { key: 'baseSize',     label: 'Clean bole',    min: 0,   max: 0.6, step: 0.02, default: 0    },
+    { key: 'baseSize',     label: 'Clean bole',    min: 0,   max: 0.8, step: 0.02, default: 0    },
     { key: 'minLen',       label: 'Min length',    min: 0.1, max: 0.6, step: 0.02, default: 0.28 },
     { key: 'growthPhase',  label: 'Growth',        min: 0.1, max: 1,   step: 0.02, default: 1, hidden: true },
     // Gravity sag (MTree-style) — recursive weight + cumulative rotation pass
@@ -262,9 +264,9 @@ export const PARAM_SCHEMA = [
     // subtree rotates with them. Wind PBD layers on top of the sagged pose.
     { key: 'gravityStrength', label: 'Gravity sag',   min: 0, max: 3, step: 0.02, default: 0    },
     { key: 'gravityStiffness',label: 'Sag stiffness', min: 0, max: 2, step: 0.02, default: 0.5  },
-    { key: 'rotation',     label: 'Rotation',      min: 0,   max: 360, step: 1,    default: 0,    live: true },
-    { key: 'sunAzimuth',   label: 'Sun azimuth',   min: 0,   max: 360, step: 1,    default: 0    },
-    { key: 'sunElevation', label: 'Sun elevation', min: 0,   max: 90,  step: 1,    default: 90   },
+    { key: 'rotation',     label: 'Rotation',      min: 0,   max: 360, step: 1,    default: 0,    live: true, unit: '°' },
+    { key: 'sunAzimuth',   label: 'Sun azimuth',   min: 0,   max: 360, step: 1,    default: 0   , unit: '°' },
+    { key: 'sunElevation', label: 'Sun elevation', min: 0,   max: 90,  step: 1,    default: 90  , unit: '°' },
   ]},
   { group: 'Pruning', params: [
     { key: 'pruneMode',    label: 'Shape',    type: 'select', options: ['off', 'ellipsoid'], default: 'off' },
@@ -278,11 +280,11 @@ export const PARAM_SCHEMA = [
     { key: 'stubsLength', label: 'Length',    min: 0.1,  max: 1.5, step: 0.05, default: 0.5 },
     { key: 'stubsTaper',  label: 'Taper',     min: 0,    max: 1,   step: 0.05, default: 0.55 },
     { key: 'stubsHue',    label: 'Hue',       min: 0,    max: 1,   step: 0.01, default: 0.08, live: true },
-    { key: 'stubsLum',    label: 'Brightness',min: 0.05, max: 0.6, step: 0.02, default: 0.18, live: true },
+    { key: 'stubsLum',    label: 'Brightness',min: 0.04, max: 0.6, step: 0.02, default: 0.18, live: true },
   ]},
   { group: 'Canopy dieback', params: [
     { key: 'dieback',        label: 'Strength',    min: 0, max: 1,   step: 0.02, default: 0,    live: false },
-    { key: 'diebackOuter',   label: 'Outer shell', min: 0.3, max: 1, step: 0.02, default: 0.55 },
+    { key: 'diebackOuter',   label: 'Cull radius', min: 0.3, max: 1, step: 0.02, default: 0.55 },
   ]},
 ];
 
@@ -319,7 +321,7 @@ export const LEVEL_SCHEMA = [
   // card); >0 = override the global with this absolute value at this level.
   // Lets you straighten the trunk and gnarl the twigs (or the inverse).
   { key: 'wobble',          label: 'Gnarliness',       min: 0,    max: 1.5, step: 0.02, default: 0    },
-  { key: 'wobbleFreq',      label: 'Gnarl scale',      min: 0,    max: 8,   step: 0.1,  default: 0    },
+  { key: 'wobbleFreq',      label: 'Gnarl scale',      min: 0.1,  max: 8,   step: 0.1,  default: 0.1  },
   { key: 'curveMode',       label: 'Curve type',       type: 'select', options: ['none', 'sCurve', 'backCurve', 'helical'], default: 'none' },
   { key: 'curveAmount',     label: 'Curve strength',   min: 0,   max: 10,   step: 0.02,  default: 0    },
   { key: 'curveBack',       label: 'Curve reversal',   min: -10, max: 10,   step: 0.02,  default: 0    },
@@ -611,8 +613,8 @@ export const SPECIES = {
       // very high stochastic makes spacing irregular — matching real
       // ancient olives which have dense-then-sparse foliage clumps.
       // L1 uses opposite phyllotaxis so branches come in pairs (Oleaceae).
-      withLevel({ children: 8, lenRatio: 0.72, angle: 1.15, angleVar: 0.42, rollVar: 0.5, phyllotaxis: 'opposite', startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.02, angleDecline: 0.15, distortion: 0.4, distortionType: 'perlin', distortionFreq: 3, curveMode: 'sCurve', curveAmount: 0.55, curveBack: 0.5, segSplits: 0.4, splitAngle: 0.55, torsion: 0.5, twist: 0.3, stochastic: 0.18, susceptibility: 1.3, gravitropism: -0.015, densityPoints: [0.4, 0.75, 1, 1, 0.95], lengthPoints: [0.7, 0.9, 1.0, 1.0, 0.95] }),
-      withLevel({ children: 6, lenRatio: 0.65, angle: 0.9, phyllotaxis: 'opposite', startPlacement: 0.2, endPlacement: 1, distortion: 0.3, stochastic: 0.35, torsion: 0.4, curveMode: 'backCurve', curveAmount: 0.45, curveBack: 0.55, segSplits: 0.25, splitAngle: 0.45, gravitropism: -0.015, densityPoints: [0.5, 0.9, 1, 0.95, 0.7] }),
+      withLevel({ children: 8, lenRatio: 0.72, angle: 1.15, angleVar: 0.42, rollVar: 0.5, phyllotaxis: 'opposite', startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.02, angleDecline: 0.15, distortion: 0.4, distortionType: 'perlin', distortionFreq: 3, curveMode: 'sCurve', curveAmount: 0.55, curveBack: 0.5, segSplits: 0.4, splitAngle: 0.55, twist: 0.3, stochastic: 0.18, susceptibility: 1.3, gravitropism: -0.015, densityPoints: [0.4, 0.75, 1, 1, 0.95], lengthPoints: [0.7, 0.9, 1.0, 1.0, 0.95] }),
+      withLevel({ children: 6, lenRatio: 0.65, angle: 0.9, phyllotaxis: 'opposite', startPlacement: 0.2, endPlacement: 1, distortion: 0.3, stochastic: 0.35, curveMode: 'backCurve', curveAmount: 0.45, curveBack: 0.55, segSplits: 0.25, splitAngle: 0.45, gravitropism: -0.015, densityPoints: [0.5, 0.9, 1, 0.95, 0.7] }),
       withLevel({ children: 5, lenRatio: 0.6, angle: 0.65, startPlacement: 0.25, endPlacement: 1, distortion: 0.25, stochastic: 0.4, curveBack: 0.35, densityPoints: [0.55, 0.9, 1, 1, 0.75] }),
       // L4 twigs: drooping, distorted.
       withLevel({ children: 4, lenRatio: 0.4, angle: 0.5, startPlacement: 0.3, endPlacement: 1, distortion: 0.3, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.45, gravitropism: 0.12, densityPoints: [0.6, 0.9, 1, 1, 0.8] }),
@@ -773,7 +775,7 @@ export const SPECIES = {
     pruneMode: 'off',
     levels: [
       // Sassafras: irregular, twisted, lots of forking at every level.
-      withLevel({ children: 6, lenRatio: 0.7, angle: 1.15, angleVar: 0.4, rollVar: 0.9, startPlacement: 0.28, endPlacement: 1, apicalDominance: 0.12, angleDecline: -0.15, distortion: 0.28, distortionType: 'perlin', distortionFreq: 2, curveMode: 'sCurve', curveAmount: 0.5, curveBack: -0.35, segSplits: 0.5, splitAngle: 0.45, torsion: 0.3, susceptibility: 1.5, gravitropism: 0.01, densityPoints: [0.4, 0.85, 1, 1, 0.85] }),
+      withLevel({ children: 6, lenRatio: 0.7, angle: 1.15, angleVar: 0.4, rollVar: 0.9, startPlacement: 0.28, endPlacement: 1, apicalDominance: 0.12, angleDecline: -0.15, distortion: 0.28, distortionType: 'perlin', distortionFreq: 2, curveMode: 'sCurve', curveAmount: 0.5, curveBack: -0.35, segSplits: 0.5, splitAngle: 0.45, susceptibility: 1.5, gravitropism: 0.01, densityPoints: [0.4, 0.85, 1, 1, 0.85] }),
       withLevel({ children: 6, lenRatio: 0.75, angle: 0.82, angleVar: 0.32, startPlacement: 0.2, endPlacement: 1, distortion: 0.24, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.4, curveBack: 0.3, segSplits: 0.35, splitAngle: 0.4, gravitropism: 0.03, densityPoints: [0.5, 0.9, 1, 0.95, 0.7] }),
       withLevel({ children: 5, lenRatio: 0.7, angle: 0.62, startPlacement: 0.25, endPlacement: 1, distortion: 0.2, stochastic: 0.28, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.04, densityPoints: [0.55, 0.9, 1, 1, 0.8] }),
       // L4 twigs: drooping, gnarled.
@@ -813,7 +815,7 @@ export const SPECIES = {
     type: 'broadleaf', barkStyle: 'beech',
     trunkHeight: 13, tipRadius: 0.005, rootFlare: 0.4,
     trunkJitter: 0.04,
-    barkHue: -0.05, barkLum: 0.45, barkRoughness: 0.7, barkNormalStrength: 0.6,
+    barkHue: 0, barkRoughness: 0.7, barkNormalStrength: 0.6,
     globalScale: 1.0,
     shape: 'spherical', baseSize: 0.35,
     leafShape: 'Oval',
@@ -840,7 +842,7 @@ export const SPECIES = {
     type: 'broadleaf', barkStyle: 'plane',
     trunkHeight: 14, tipRadius: 0.006, rootFlare: 0.6,
     trunkJitter: 0.06,
-    barkHue: 0.05, barkLum: 0.55, barkRoughness: 0.7, barkNormalStrength: 0.9,
+    barkHue: 0.05, barkRoughness: 0.7, barkNormalStrength: 0.9,
     barkTexScaleU: 1.8, barkTexScaleV: 2.2,
     globalScale: 1.0,
     shape: 'free', baseSize: 0.3,
@@ -934,7 +936,7 @@ export const SPECIES = {
       // L1: low-fork, layered horizontal scaffolds — Japanese maple's
       // distinctive cake-tier silhouette comes from low gravitropism +
       // strong horizontal angle.
-      withLevel({ children: 7, lenRatio: 0.85, angle: 1.35, angleVar: 0.3, rollVar: 0.95, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.04, angleDecline: 0.35, distortion: 0.32, distortionType: 'perlin', distortionFreq: 2.2, curveMode: 'sCurve', curveAmount: 0.5, curveBack: -0.4, segSplits: 0.45, splitAngle: 0.45, torsion: 0.2, susceptibility: 1.4, gravitropism: 0.04, densityPoints: [0.7, 0.95, 1.0, 0.95, 0.8], lengthPoints: [0.85, 1.0, 1.05, 1.0, 0.85] }),
+      withLevel({ children: 7, lenRatio: 0.85, angle: 1.35, angleVar: 0.3, rollVar: 0.95, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.04, angleDecline: 0.35, distortion: 0.32, distortionType: 'perlin', distortionFreq: 2.2, curveMode: 'sCurve', curveAmount: 0.5, curveBack: -0.4, segSplits: 0.45, splitAngle: 0.45, susceptibility: 1.4, gravitropism: 0.04, densityPoints: [0.7, 0.95, 1.0, 0.95, 0.8], lengthPoints: [0.85, 1.0, 1.05, 1.0, 0.85] }),
       withLevel({ children: 6, lenRatio: 0.78, angle: 0.85, angleVar: 0.3, rollVar: 0.9, startPlacement: 0.18, endPlacement: 1, apicalDominance: 0.05, distortion: 0.28, distortionType: 'perlin', distortionFreq: 2.8, curveMode: 'sCurve', curveAmount: 0.4, curveBack: -0.3, segSplits: 0.3, splitAngle: 0.4, gravitropism: 0.06, susceptibility: 1.6, densityPoints: [0.75, 0.95, 1.0, 0.95, 0.8] }),
       withLevel({ children: 5, lenRatio: 0.65, angle: 0.65, angleVar: 0.22, rollVar: 0.9, startPlacement: 0.2, endPlacement: 1, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3.2, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.08, densityPoints: [0.8, 0.95, 1.0, 0.95, 0.85] }),
       withLevel({ children: 4, lenRatio: 0.4, angle: 0.5, startPlacement: 0.25, endPlacement: 1, distortion: 0.3, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.32, gravitropism: 0.18, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
@@ -947,7 +949,7 @@ export const SPECIES = {
     type: 'broadleaf', barkStyle: 'eucalyptus',
     trunkHeight: 17, tipRadius: 0.006, rootFlare: 0.4,
     trunkJitter: 0.05,
-    barkHue: 0.02, barkLum: 0.5, barkRoughness: 0.55, barkNormalStrength: 0.5,
+    barkHue: 0.02, barkRoughness: 0.55, barkNormalStrength: 0.5,
     barkTexScaleU: 1.5, barkTexScaleV: 2.5,
     globalScale: 1.0,
     shape: 'free', baseSize: 0.3,
@@ -1251,16 +1253,16 @@ export const CONIFER_SCHEMA = [
   { group: 'Crown', params: [
     { key: 'cBranchCount',  label: 'Branches',      min: 8,    max: 200,  step: 1,    default: 55 },
     { key: 'cBranchAngle',  label: 'Branch angle',  min: 0.2,  max: 2.2,  step: 0.02, default: 1.05 },
-    { key: 'cBranchStart',  label: 'Crown start',   min: 0.0,  max: 0.95, step: 0.02, default: 0.2 },
+    { key: 'cBranchStart',  label: 'Crown start',   min: 0.0,  max: 0.96, step: 0.02, default: 0.2 },
     { key: 'cCrownTaper',   label: 'Crown taper',   min: 0,    max: 1,    step: 0.02, default: 0.75 },
     { key: 'cBranchDroop',  label: 'Branch droop',  min: 0,    max: 0.3,  step: 0.002,default: 0.025 },
-    { key: 'cBranchLen',    label: 'Branch length', min: 0.15, max: 1.8,  step: 0.02, default: 0.42 },
+    { key: 'cBranchLen',    label: 'Branch length', min: 0.16, max: 1.8,  step: 0.02, default: 0.42 },
     { key: 'cBranchRadiusRatio', label: 'Branch attach', min: 0.05, max: 0.8, step: 0.01, default: 0.32 },
     { key: 'cBranchTaper',  label: 'Branch taper',  min: 0.2,  max: 3,    step: 0.05, default: 1.5 },
   ]},
   { group: 'Twigs', params: [
     { key: 'cTwigCount',    label: 'Twigs/branch',  min: 2,    max: 10,   step: 1,    default: 6 },
-    { key: 'cTwigLen',      label: 'Twig length',   min: 0.3,  max: 0.95, step: 0.02, default: 0.6 },
+    { key: 'cTwigLen',      label: 'Twig length',   min: 0.3,  max: 0.96, step: 0.02, default: 0.6 },
     { key: 'cTwigAngle',    label: 'Twig angle',    min: 0.3,  max: 1.3,  step: 0.05, default: 0.95 },
     { key: 'cTwigRadiusRatio', label: 'Twig attach', min: 0.05, max: 0.8, step: 0.01, default: 0.28 },
     { key: 'cTwigTaper',    label: 'Twig taper',    min: 0.2,  max: 3,    step: 0.05, default: 1.4 },
@@ -1549,11 +1551,11 @@ export const PARAM_DESCRIPTIONS = {
   fruitSat:         'Fruit saturation',
   // Canopy dieback
   dieback:          'Strength of the dead-twig culling on the inside of the canopy',
-  diebackOuter:     'Threshold for the outer shell that survives — higher = thicker live canopy',
+  diebackOuter:     'Radial fraction of the inner cull zone — higher = wider kill region inside the crown (less live canopy near the trunk).',
   // Per-level (additions)
   radiusRatio:      'Branch base radius as a fraction of the parent local radius',
   phyllotaxis:      'Branch arrangement pattern — spiral, opposite, decussate, whorled',
-  apicalContinue:   'Force the last child to inherit parent direction with a length boost (central leader)',
+  apicalContinue:   'Forces the last child to inherit parent direction with a length boost (central leader). Only fires when apicalDominance > 0 — otherwise no apical child is selected and this slider has no visible effect.',
   signalDecay:      'Sibling decay — later children get progressively shorter',
   angleDecline:     'Angle taper along the parent — positive = tip children angle out more, negative = tip more vertical',
   curveMode:        'Parametric curve shape — none, sCurve, backCurve, helical',
