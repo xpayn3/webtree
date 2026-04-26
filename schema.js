@@ -121,7 +121,7 @@ export const PARAM_SCHEMA = [
     { key: 'barkBumpStrength', label: 'Bump strength',  min: 0, max: 8,   step: 0.1,   default: 4.5,  live: true },
     // ── Color ──
     { key: 'barkHue',        label: 'Hue',         min: 0,   max: 1,   step: 0.01, default: 0.08, live: true, swatch: 'hue' },
-    { key: 'barkTint',       label: 'Tint amount', min: 0,   max: 1,   step: 0.02, default: 0,    live: true },
+    { key: 'barkTint',       label: 'Tint amount', min: 0,   max: 1,   step: 0.02, default: 0,    live: true, swatch: 'tint' },
     { key: 'barkBrightness', label: 'Brightness',  min: 0.3, max: 2,   step: 0.02, default: 1.0,  live: true, swatch: 'brightness' },
     { key: 'barkSaturation', label: 'Saturation',  min: 0,   max: 2,   step: 0.02, default: 1.0,  live: true, swatch: 'saturation' },
     // ── Surface ──

@@ -3390,7 +3390,14 @@ function applyLeafShape() {
   const base = P.leafProfile;
   // Presets carry their own silhouette polygon; Custom uses the user's
   // sculpted P.leafProfile.silhouette directly.
+  // Bake the procedural blade in near-white instead of the default green
+  // so the material's seasonal tint (m.color) dominates after the texture
+  // multiply. Without this, a pink/orange material color × green texture
+  // collapses to muddy olive — i.e. autumn/blossom species can't show their
+  // tint. Custom profile may still override via `color` / `veinColor`.
   const profile = shape === 'Custom' ? base : { ...base, ...LEAF_PRESETS[shape] };
+  if (!profile.color)     profile.color     = '#e6e6e6';
+  if (!profile.veinColor) profile.veinColor = '#7a7a7a';
   _ensureProceduralLeafTex(256);
   drawLeafToCanvas(_proceduralLeafCanvas.getContext('2d'), profile, 256);
   drawLeafBumpToCanvas(_proceduralLeafBumpCanvas.getContext('2d'), profile, 256);
@@ -3628,6 +3635,23 @@ function applyBarkMaterial() {
   _mossAmount.value = P.mossAmount ?? 0;
   _mossThreshold.value = P.mossThreshold ?? 0.35;
   _mossCol.value.setHSL(P.mossHue ?? 0.3, 0.55, P.mossLum ?? 0.25);
+  _updateBarkSwatchHues();
+}
+
+// Push barkHue / mossHue into the `--swatch-hue` CSS var on every bark- /
+// moss-prefixed scrubber so saturation, brightness, and tint sliders show
+// their gradient at the *current* colour (Photoshop / Figma style). Cheap:
+// runs once per applyBarkMaterial, ~30 setProperty calls.
+function _updateBarkSwatchHues() {
+  if (typeof document === 'undefined') return;
+  const barkDeg = ((P.barkHue ?? 0.08) * 360).toFixed(1);
+  const mossDeg = ((P.mossHue ?? 0.3) * 360).toFixed(1);
+  for (const el of document.querySelectorAll('.scrubber[data-pkey^="bark"]')) {
+    el.style.setProperty('--swatch-hue', barkDeg);
+  }
+  for (const el of document.querySelectorAll('.scrubber[data-pkey^="moss"]')) {
+    el.style.setProperty('--swatch-hue', mossDeg);
+  }
 }
 
 // Wireframe is rendered as a Mesh with wireframe=true so it shares treeMesh's
@@ -8080,10 +8104,12 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   if (_paramLocks.has(p.key)) row.classList.add('locked');
   const track = document.createElement('div');
   track.className = 'scrubber-track';
-  // Photoshop-style colour swatch behind the fill — shows what the slider
-  // controls at a glance. The translucent fill (~6% white) lets the gradient
-  // read through. `hue` paints a full rainbow; `saturation` shows grey →
-  // saturated red; `brightness` / `lum` shows black → white.
+  // Photoshop-style colour swatch behind the fill — shows the slider's
+  // effect at a glance. `hue` is a static rainbow; `saturation`,
+  // `brightness`, and `tint` reference `--swatch-hue` (deg) on the scrubber
+  // so they update live as the matching hue slider changes. Bark/moss
+  // group their hues — see _updateBarkSwatchHues, called at the end of
+  // applyBarkMaterial.
   if (p.swatch === 'hue') {
     track.style.backgroundImage =
       'linear-gradient(to right,' +
@@ -8097,12 +8123,35 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
     scrubber.classList.add('swatch-hue');
   } else if (p.swatch === 'saturation') {
     track.style.backgroundImage =
-      'linear-gradient(to right, hsl(0,0%,50%), hsl(0,80%,50%))';
+      'linear-gradient(to right,' +
+      ' hsl(var(--swatch-hue, 0), 0%, 50%),' +
+      ' hsl(var(--swatch-hue, 0), 80%, 50%))';
     scrubber.classList.add('swatch-color');
   } else if (p.swatch === 'brightness' || p.swatch === 'lum') {
     track.style.backgroundImage =
-      'linear-gradient(to right, #000, #fff)';
+      'linear-gradient(to right,' +
+      ' #000,' +
+      ' hsl(var(--swatch-hue, 0), 70%, 50%) 50%,' +
+      ' #fff)';
     scrubber.classList.add('swatch-color');
+  } else if (p.swatch === 'tint') {
+    track.style.backgroundImage =
+      'linear-gradient(to right,' +
+      ' hsl(var(--swatch-hue, 0), 0%, 90%),' +
+      ' hsl(var(--swatch-hue, 0), 75%, 55%))';
+    scrubber.classList.add('swatch-color');
+  }
+  // Seed --swatch-hue at creation time so the gradient is correct on first
+  // paint (before applyBarkMaterial has run / queried these scrubbers). On
+  // subsequent live edits, _updateBarkSwatchHues keeps it in sync. Wrap in
+  // try/catch in case P isn't declared yet (TDZ during initial paint).
+  if (p.swatch === 'saturation' || p.swatch === 'brightness' || p.swatch === 'lum' || p.swatch === 'tint') {
+    let huePct = 0;
+    try {
+      if (p.key.startsWith('bark')) huePct = (P.barkHue ?? 0.08) * 360;
+      else if (p.key.startsWith('moss')) huePct = (P.mossHue ?? 0.3) * 360;
+    } catch { /* P not in scope yet — fall back to 0 (red) */ }
+    scrubber.style.setProperty('--swatch-hue', huePct.toFixed(1));
   }
   const fillEl = document.createElement('div');
   fillEl.className = 'scrubber-fill';
@@ -8148,9 +8197,14 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
 
   // Returns the formatted text so the pointermove path can forward it to
   // the floating tooltip without calling fmt() twice per frame.
+  const isSwatch = !!p.swatch;
   function applyStep(s, emit = true) {
     step = Math.max(0, Math.min(totalSteps, s));
-    fillEl.style.width = `${(step / totalSteps) * 100}%`;
+    const pct = (step / totalSteps) * 100;
+    fillEl.style.width = `${pct}%`;
+    // Swatch sliders draw a pseudo-element thumb at --marker-x — see CSS
+    // for `.swatch-hue::before` / `.swatch-color::before`.
+    if (isSwatch) scrubber.style.setProperty('--marker-x', `${pct}%`);
     const v = p.min + step * p.step;
     const text = fmt(v, p.step);
     if (text !== _lastText) { val.textContent = text; _lastText = text; }

@@ -2539,10 +2539,12 @@ body.bake-mode #axis-gizmo {
   border-right: 2px solid var(--accent);
 }
 
-/* Colour-swatch scrubbers (hue / saturation / brightness): the gradient on
-   the track does the visual heavy lifting; the fill becomes a bold thumb
-   marker (white pill with dark outline) so the cursor position reads
-   instantly against any colour the gradient happens to be at. */
+/* Colour-swatch scrubbers (hue / saturation / brightness / tint): the
+   gradient on the track does the visual heavy lifting. We drop the
+   white-wash fill entirely and draw a discrete white-pill thumb via a
+   pseudo-element on the scrubber, positioned at --marker-x (set by
+   applyStep). The thumb sits *above* the track in the stacking order so
+   it reads against any colour underneath. */
 #sidebar .scrubber.swatch-hue,
 #sidebar .scrubber.swatch-color {
   background: rgba(0, 0, 0, 0.25);  /* dark frame so light gradients still read */
@@ -2551,32 +2553,56 @@ body.bake-mode #axis-gizmo {
 #sidebar .scrubber.swatch-color .scrubber-fill {
   background: transparent;
   border-right: none;
-  /* Marker = a fat white-cored bar at the right-inside edge of the fill,
-     sandwiched in black so it pops over any gradient colour underneath.
-     Inset shadows aren't clipped by the track's overflow:hidden the way
-     outset shadows are, so the marker stays visible at any value. */
-  box-shadow:
-    inset -2px 0 0 0 #fff,
-    inset -4px 0 0 0 rgba(0, 0, 0, 0.9),
-    inset -6px 0 0 0 rgba(255, 255, 255, 0.4);
+  box-shadow: none;
 }
-#sidebar .scrubber.swatch-hue:hover .scrubber-fill,
-#sidebar .scrubber.swatch-color:hover .scrubber-fill {
-  background: transparent;
+#sidebar .scrubber.swatch-hue::before,
+#sidebar .scrubber.swatch-color::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: var(--marker-x, 0%);
+  width: 4px;
+  /* translateX(-50%) centres the thumb on the value position. We animate
+     transform so width changes feel sprung rather than jumpy. */
+  transform: translateX(-50%);
+  background: #fff;
+  border-radius: 2px;
   box-shadow:
-    inset -3px 0 0 0 #fff,
-    inset -5px 0 0 0 rgba(0, 0, 0, 0.95),
-    inset -7px 0 0 0 rgba(255, 255, 255, 0.5);
+    0 0 0 1.5px rgba(0, 0, 0, 0.85),
+    0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 1;
+  transition:
+    transform 160ms var(--ease-out),
+    width 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
 }
-#sidebar .scrubber.swatch-hue.dragging .scrubber-fill,
-#sidebar .scrubber.swatch-color.dragging .scrubber-fill {
-  background: transparent;
+@media (hover: hover) and (pointer: fine) {
+  #sidebar .scrubber.swatch-hue:hover::before,
+  #sidebar .scrubber.swatch-color:hover::before {
+    width: 5px;
+    transform: translateX(-50%) scale(1.05);
+    box-shadow:
+      0 0 0 1.5px rgba(0, 0, 0, 0.9),
+      0 1px 6px rgba(0, 0, 0, 0.5);
+  }
+}
+#sidebar .scrubber.swatch-hue:active::before,
+#sidebar .scrubber.swatch-color:active::before {
+  transform: translateX(-50%) scale(0.96);
+  transition-duration: 100ms;
+}
+#sidebar .scrubber.swatch-hue.dragging::before,
+#sidebar .scrubber.swatch-color.dragging::before {
+  width: 5px;
+  transform: translateX(-50%) scale(1.08);
   box-shadow:
-    inset -3px 0 0 0 var(--accent),
-    inset -5px 0 0 0 #fff,
-    inset -7px 0 0 0 rgba(0, 0, 0, 0.95);
+    0 0 0 1.5px var(--accent),
+    0 0 0 3px rgba(0, 0, 0, 0.85),
+    0 2px 6px rgba(0, 0, 0, 0.5);
 }
-/* Subtle text shadow so the label/value stays legible over bright gradients */
+/* Text shadow keeps label / value legible over bright gradients */
 #sidebar .scrubber.swatch-hue .scrubber-overlay,
 #sidebar .scrubber.swatch-color .scrubber-overlay {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
@@ -2586,6 +2612,12 @@ body.bake-mode #axis-gizmo {
 #sidebar .scrubber.swatch-color .name,
 #sidebar .scrubber.swatch-color .val {
   color: rgba(255, 255, 255, 0.92);
+}
+@media (prefers-reduced-motion: reduce) {
+  #sidebar .scrubber.swatch-hue::before,
+  #sidebar .scrubber.swatch-color::before {
+    transition: none;
+  }
 }
 #sidebar .scrubber-overlay {
   position: absolute;
