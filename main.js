@@ -3093,14 +3093,27 @@ barkMat.positionNode = positionLocal.add(barkWindDisp);
 // Tints bark toward moss color on the upward-facing sides of branches where
 // rain + light collect. Driven by world-space normal's Y component.
 const _mossCol = uniform(new THREE.Color(0.18, 0.28, 0.12));
-const _mossTint = uniform(new THREE.Color(1, 1, 1));
+const _mossTint = uniform(new THREE.Color(1, 1, 1));   // hue tint (overlay color)
+const _barkSatU = uniform(1.0);                         // texture saturation multiplier (0=B&W, 1=natural, >1=punchy)
+const _barkBrightU = uniform(1.0);                      // final brightness multiplier
 const _mossAmount = uniform(0);
 const _mossThreshold = uniform(0.35);
 {
   const tex = tslTexture(barkAlbedo);
+  // Photoshop-style HSL adjustment IN-SHADER:
+  //   1. Compute Rec.709 luminance of the bark texture.
+  //   2. mix(luminance, tex.rgb, _barkSatU) — true saturation (works
+  //      regardless of tint amount because it operates on the texture
+  //      itself, not on a separate tint multiplier).
+  //   3. Multiply by _mossTint (the hue overlay — driven by hue + tint
+  //      sliders on CPU).
+  //   4. Scale by _barkBrightU.
+  const lum709 = tex.x.mul(0.2126).add(tex.y.mul(0.7152)).add(tex.z.mul(0.0722));
+  const desat = mix(vec3(lum709, lum709, lum709), tex.xyz, _barkSatU);
+  const tinted = desat.mul(_mossTint).mul(_barkBrightU);
   const upFactor = normalWorld.y;
   const mask = smoothstep(_mossThreshold.sub(0.25), _mossThreshold, upFactor).mul(_mossAmount);
-  barkMat.colorNode = vec4(mix(tex.xyz.mul(_mossTint), _mossCol, mask), tex.w);
+  barkMat.colorNode = vec4(mix(tinted, _mossCol, mask), tex.w);
 }
 
 // Factory: every leaf/needle material shares the TSL wind-displacement node.
@@ -3951,23 +3964,19 @@ function applyBarkMaterial() {
   const tint = P.barkTint ?? 0;
   const brightness = P.barkBrightness ?? 1.0;
   const saturation = P.barkSaturation ?? 1.0;
+  // Hue overlay: a saturated swatch at the chosen hue; mix amount is `tint`.
+  // When tint = 0 the overlay is pure white (no hue cast — texture's natural
+  // colour passes through); when tint = 1 the overlay is the full hue swatch.
   _barkTint.setHSL(hue, 0.5, 0.5);
-  // barkMat.color is now baked into the colorNode's tint uniform instead
-  // (we override colorNode). Drive the uniform; keep m.color in sync for fallbacks.
-  // Final tint = white→hue (by tint amount) × brightness, with saturation
-  // applied as a luminance-preserving lerp from grey toward the tinted RGB.
   _mossTint.value.setRGB(1, 1, 1).lerp(_barkTint, tint);
-  if (saturation !== 1.0) {
-    // Standard luminance, then mix grey↔color by `saturation`. <1 = mute,
-    // >1 = punch. Clamp to non-negative to avoid colour inversion.
-    const c = _mossTint.value;
-    const lum = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
-    c.r = Math.max(0, lum + (c.r - lum) * saturation);
-    c.g = Math.max(0, lum + (c.g - lum) * saturation);
-    c.b = Math.max(0, lum + (c.b - lum) * saturation);
-  }
-  if (brightness !== 1.0) _mossTint.value.multiplyScalar(brightness);
-  barkMat.color.copy(_mossTint.value);
+  // Saturation + Brightness are now applied IN-SHADER on the bark texture
+  // itself (via _barkSatU / _barkBrightU). That way Saturation actually
+  // de/saturates the bark colours regardless of tint amount, instead of
+  // silently no-op-ing on a white CPU-side multiplier.
+  _barkSatU.value = saturation;
+  _barkBrightU.value = brightness;
+  // Keep barkMat.color roughly synced for any fallback path that reads it.
+  barkMat.color.copy(_mossTint.value).multiplyScalar(brightness);
   barkMat.roughness = P.barkRoughness ?? 0.95;
   const ns = P.barkNormalStrength ?? 1.0;
   if (barkMat.normalScale) barkMat.normalScale.set(ns, ns);

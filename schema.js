@@ -124,10 +124,14 @@ export const PARAM_SCHEMA = [
     { key: 'barkGrain',        label: 'Grain',          min: 0, max: 30,  step: 0.5,   default: 6,    live: true },
     { key: 'barkBumpStrength', label: 'Bump strength',  min: 0, max: 8,   step: 0.1,   default: 4.5,  live: true },
     // ── Color ──
-    { key: 'barkHue',        label: 'Hue',         min: 0,   max: 1,   step: 0.01, default: 0.08, live: true, swatch: 'hue' },
+    // Photoshop-style HSL adjustment: Saturation desaturates the bark
+    // texture itself (0 = greyscale, 1 = natural, 2 = punchy); Brightness
+    // multiplies the final colour. Tint hue + Tint amount mix a coloured
+    // overlay on top — independent of the saturation/brightness pair.
+    { key: 'barkHue',        label: 'Tint hue',    min: 0,   max: 1,   step: 0.01, default: 0.08, live: true, swatch: 'hue' },
     { key: 'barkTint',       label: 'Tint amount', min: 0,   max: 1,   step: 0.02, default: 0,    live: true, swatch: 'tint' },
-    { key: 'barkBrightness', label: 'Brightness',  min: 0.3, max: 2,   step: 0.02, default: 1.0,  live: true, swatch: 'brightness' },
     { key: 'barkSaturation', label: 'Saturation',  min: 0,   max: 2,   step: 0.02, default: 1.0,  live: true, swatch: 'saturation' },
+    { key: 'barkBrightness', label: 'Brightness',  min: 0.3, max: 2,   step: 0.02, default: 1.0,  live: true, swatch: 'brightness' },
     // ── Surface ──
     { key: 'barkRoughness',      label: 'Roughness',    min: 0.2, max: 1,   step: 0.02, default: 0.95, live: true },
     { key: 'barkNormalStrength', label: 'Normal scale', min: 0,   max: 2.5, step: 0.05, default: 1.0,  live: true },
