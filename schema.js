@@ -98,14 +98,34 @@ export const PARAM_SCHEMA = [
   // normal canvases on the fly and swaps them into barkMat. Caching means
   // a repeated style is free after the first run.
   { group: 'Bark Style', params: [
-    { key: 'barkStyle', label: 'Style', type: 'select',
+    // Style preset — picks a starting point. Switching it loads the
+    // preset's values into all the per-layer sliders below; you tune
+    // from there.
+    { key: 'barkStyle', label: 'Style preset', type: 'select',
       options: ['oak', 'pine', 'birch', 'cherry', 'smooth'], default: 'oak', live: true },
     { key: 'barkSeed',  label: 'Variation', min: 1, max: 50, step: 1, default: 1, live: true },
-    // Rotation angle (degrees) for the bark texture mapping. 0 = vertical
-    // grain along the trunk; positive values tilt the pattern. Useful for
-    // spiral-grain species (cedar, hickory) or just visual variation.
-    // Applied via THREE.Texture.rotation — instant, no regen.
     { key: 'barkRotation', label: 'Grain angle', min: -90, max: 90, step: 1, default: 0, live: true },
+  ]},
+  // Layered procedural bark — Redshift-style stack. Each layer
+  // contributes to a height field that drives both albedo (palette
+  // interpolation) and normal map (central differences). 0-frequency
+  // disables a layer. Defaults match the 'oak' preset; switching
+  // `barkStyle` repopulates these. Each slider triggers a debounced
+  // texture regen via the live-onAfter path.
+  { group: 'Bark Layers', params: [
+    { key: 'barkVertFreq',     label: 'Fissures freq',      min: 0,   max: 20,  step: 0.25, default: 4,    live: true },
+    { key: 'barkVertSharp',    label: 'Fissures sharpness', min: 0.5, max: 12,  step: 0.5,  default: 6,    live: true },
+    { key: 'barkVertDepth',    label: 'Fissures depth',     min: 0,   max: 1,   step: 0.02, default: 0.45, live: true },
+    { key: 'barkVertWobble',   label: 'Fissures wobble',    min: 0,   max: 0.3, step: 0.01, default: 0.05, live: true },
+    { key: 'barkHorizFreq',    label: 'Bands freq',         min: 0,   max: 100, step: 1,    default: 6,    live: true },
+    { key: 'barkHorizSharp',   label: 'Bands sharpness',    min: 0.5, max: 20,  step: 0.5,  default: 1,    live: true },
+    { key: 'barkHorizAmp',     label: 'Bands amount',       min: 0,   max: 0.6, step: 0.02, default: 0.12, live: true },
+    { key: 'barkLargeFreq',    label: 'Patches freq',       min: 0,   max: 6,   step: 0.1,  default: 1.5,  live: true },
+    { key: 'barkLargeAmp',     label: 'Patches amount',     min: 0,   max: 0.6, step: 0.02, default: 0.20, live: true },
+    { key: 'barkMicroFreq',    label: 'Micro freq',         min: 0,   max: 80,  step: 1,    default: 28,   live: true },
+    { key: 'barkMicroAmp',     label: 'Micro amount',       min: 0,   max: 0.2, step: 0.005,default: 0.06, live: true },
+    { key: 'barkBumpStrength', label: 'Bump strength',      min: 0,   max: 8,   step: 0.1,  default: 4.5,  live: true },
+    { key: 'barkGrain',        label: 'Grain',              min: 0,   max: 30,  step: 0.5,  default: 6,    live: true },
   ]},
   { group: 'Bark Material', params: [
     { key: 'barkHue',            label: 'Hue',          min: 0, max: 1,   step: 0.01, default: 0.08, live: true },
@@ -454,9 +474,9 @@ export const SPECIES = {
     globalScale: 0.95,
     shape: 'free', baseSize: 0.55,
     leafShape: 'Oval',
-    leafSize: 0.1, leafSpread: 0.35, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.15,
-    leavesPerTip: 18, leafChainSteps: 6, leavesStart: 0, season: 0.05,
-    leafClusterSize: 4, leafClusterSpread: 0.65,
+    leafSize: 0.11, leafSpread: 0.4, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.15,
+    leavesPerTip: 28, leafChainSteps: 9, leavesStart: 0, season: 0.05,
+    leafClusterSize: 5, leafClusterSpread: 0.75,
     leafPhyllotaxis: 'alternate',
     pruneMode: 'off',
     levels: [
@@ -465,9 +485,9 @@ export const SPECIES = {
       // entirely to the top of the trunk.
       withLevel({ children: 3, lenRatio: 0.9, angle: 0.5, angleVar: 0.18, rollVar: 0.5, startPlacement: 0.6, endPlacement: 1, apicalDominance: 0, apicalContinue: 0, angleDecline: -0.4, distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.0, curveMode: 'backCurve', curveAmount: 0.35, curveBack: -0.6, segSplits: 0, susceptibility: 1.4, gravitropism: -0.05, phototropism: 0.05, densityPoints: [0, 0.1, 0.5, 1, 1], lengthPoints: [0.95, 1, 1, 0.95, 0.85] }),
       // L2 — secondary scaffold off each primary. Spreading crown fan.
-      withLevel({ children: 6, lenRatio: 0.62, angle: 0.95, angleVar: 0.25, startPlacement: 0.25, endPlacement: 1, apicalDominance: 0.1, distortion: 0.24, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.35, curveBack: -0.2, segSplits: 0.15, splitAngle: 0.35, gravitropism: 0.03, susceptibility: 1.5, densityPoints: [0.4, 0.85, 1, 1, 0.8] }),
-      withLevel({ children: 5, lenRatio: 0.55, angle: 0.7, startPlacement: 0.25, endPlacement: 1, distortion: 0.22, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.05, densityPoints: [0.5, 0.85, 1, 1, 0.75] }),
-      withLevel({ children: 4, lenRatio: 0.42, angle: 0.5, startPlacement: 0.3, endPlacement: 1, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3.4, stochastic: 0.3, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.16, densityPoints: [0.5, 0.85, 1, 1, 0.8] }),
+      withLevel({ children: 10, lenRatio: 0.62, angle: 0.95, angleVar: 0.25, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.1, distortion: 0.24, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.35, curveBack: -0.2, segSplits: 0.2, splitAngle: 0.35, gravitropism: 0.03, susceptibility: 1.5, densityPoints: [0.45, 0.9, 1, 1, 0.85] }),
+      withLevel({ children: 8, lenRatio: 0.55, angle: 0.7, startPlacement: 0.2, endPlacement: 1, distortion: 0.22, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.3, segSplits: 0.15, splitAngle: 0.32, gravitropism: 0.05, densityPoints: [0.55, 0.9, 1, 1, 0.8] }),
+      withLevel({ children: 6, lenRatio: 0.42, angle: 0.5, startPlacement: 0.25, endPlacement: 1, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3.4, stochastic: 0.3, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.16, densityPoints: [0.55, 0.9, 1, 1, 0.85] }),
     ],
   },
   Willow: {

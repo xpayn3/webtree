@@ -2252,7 +2252,11 @@ function applyTheme(name) {
     }),
   );
   shadowMesh.rotation.x = -Math.PI / 2;
-  shadowMesh.position.y = 0.05;
+  // Was 0.05 — that lifted the contact shadow 5 cm above the floor and
+  // produced a visible dark strip across the bottom of any standing
+  // geometry (trunk base + avatar legs in y=0..0.05). Sit it directly on
+  // the floor; polygonOffset (above) keeps it from z-fighting the cyc.
+  shadowMesh.position.y = 0.001;
   shadowMesh.renderOrder = 1;
   scene.add(shadowMesh);
 }
@@ -2462,11 +2466,37 @@ function _makeTilableNoise(seed, period) {
 //   4. barkRotation snapping — rotation is set on the persistent texture
 //      so it doesn't get wiped by a later swap.
 function generateBarkTexture(style = 'oak', seed = 1) {
-  const key = style + ':' + seed;
+  // Merge: start with the style preset's full recipe, then override any
+  // field with the matching P.bark* slider. This way the dropdown gives
+  // sensible starting points and individual sliders refine.
+  const recipe = BARK_STYLES[style] || BARK_STYLES.oak;
+  const p = {
+    vertFreq:    P.barkVertFreq     ?? recipe.vertFreq,
+    vertSharp:   P.barkVertSharp    ?? recipe.vertSharp,
+    vertWobble:  P.barkVertWobble   ?? recipe.vertWobble,
+    vertDepth:   P.barkVertDepth    ?? recipe.vertDepth,
+    horizFreq:   P.barkHorizFreq    ?? recipe.horizFreq,
+    horizSharp:  P.barkHorizSharp   ?? recipe.horizSharp,
+    horizAmp:    P.barkHorizAmp     ?? recipe.horizAmp,
+    largeFreq:   P.barkLargeFreq    ?? recipe.largeFreq,
+    largeAmp:    P.barkLargeAmp     ?? recipe.largeAmp,
+    microFreq:   P.barkMicroFreq    ?? recipe.microFreq,
+    microAmp:    P.barkMicroAmp     ?? recipe.microAmp,
+    normalStrength: P.barkBumpStrength ?? recipe.normalStrength,
+    grain:       P.barkGrain        ?? recipe.grain,
+    palette:     recipe.palette,    // colour stops still come from preset
+  };
+  // Cache key includes every layer field so per-slider tweaks each get
+  // their own cached canvas. Palette is implicit in `style`.
+  const key = style + ':' + seed + ':' +
+    p.vertFreq + ',' + p.vertSharp + ',' + p.vertWobble + ',' + p.vertDepth + ':' +
+    p.horizFreq + ',' + p.horizSharp + ',' + p.horizAmp + ':' +
+    p.largeFreq + ',' + p.largeAmp + ':' +
+    p.microFreq + ',' + p.microAmp + ':' +
+    p.normalStrength + ',' + p.grain;
   const cached = _BARK_TEX_CACHE.get(key);
   if (cached) return cached;
 
-  const p = BARK_STYLES[style] || BARK_STYLES.oak;
   const N = 512;
 
   try {
@@ -3462,24 +3492,53 @@ function applyLeafMaterial() {
 }
 
 const _barkTint = new THREE.Color();
-// Swap the canvases inside the singleton bark textures. The Texture
-// objects themselves never change — the TSL colorNode + material's
-// normalMap binding both stay valid. Called from applyBarkMaterial so
-// every species change picks up the new style.
-let _activeBarkStyle = 'oak';   // matches the initial paint above
-let _activeBarkSeed = 1;
+// Bark style + layer manager.
+// - Style dropdown change → load that preset's values into P.bark* layer
+//   sliders, then regen.
+// - Layer slider change → P.bark* changes; regen with whatever's in P.
+// - The cache key in generateBarkTexture covers every layer field, so a
+//   given combination only regenerates once.
+let _activeBarkStyle = '__init__';
+const _BARK_LAYER_KEYS = [
+  'vertFreq','vertSharp','vertWobble','vertDepth',
+  'horizFreq','horizSharp','horizAmp',
+  'largeFreq','largeAmp','microFreq','microAmp',
+  'normalStrength','grain',
+];
+function _loadBarkPreset(name) {
+  const recipe = BARK_STYLES[name] || BARK_STYLES.oak;
+  P.barkVertFreq     = recipe.vertFreq;
+  P.barkVertSharp    = recipe.vertSharp;
+  P.barkVertWobble   = recipe.vertWobble;
+  P.barkVertDepth    = recipe.vertDepth;
+  P.barkHorizFreq    = recipe.horizFreq;
+  P.barkHorizSharp   = recipe.horizSharp;
+  P.barkHorizAmp     = recipe.horizAmp;
+  P.barkLargeFreq    = recipe.largeFreq;
+  P.barkLargeAmp     = recipe.largeAmp;
+  P.barkMicroFreq    = recipe.microFreq;
+  P.barkMicroAmp     = recipe.microAmp;
+  P.barkBumpStrength = recipe.normalStrength;
+  P.barkGrain        = recipe.grain;
+}
 function applyBarkStyle() {
   const style = P.barkStyle || 'oak';
-  const seed  = P.barkSeed ?? 1;
-  if (style === _activeBarkStyle && seed === _activeBarkSeed) return;
+  // First-time entry OR style preset switch → load the preset values
+  // into the per-layer sliders so they reflect the active style. After
+  // that, layer-slider edits stand on their own.
+  if (style !== _activeBarkStyle) {
+    _loadBarkPreset(style);
+    _activeBarkStyle = style;
+    // Refresh any rendered slider rows so the UI shows new values.
+    if (typeof syncUI === 'function') syncUI();
+  }
+  const seed = P.barkSeed ?? 1;
   const tex = generateBarkTexture(style, seed);
   if (!tex) return; // generator failed — keep the previous bark
   barkAlbedo.image = tex.albedoCanvas;
   barkNormal.image = tex.normalCanvas;
   barkAlbedo.needsUpdate = true;
   barkNormal.needsUpdate = true;
-  _activeBarkStyle = style;
-  _activeBarkSeed  = seed;
 }
 
 function applyBarkMaterial() {
