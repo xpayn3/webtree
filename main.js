@@ -2901,40 +2901,46 @@ function generateBarkThumbnail(style, size = 48) {
 
 // Greyscale thumbnail of a single noise pattern at native frequency. Used
 // by the per-layer pattern picker so the user can see what each pattern
-// looks like at a glance. Cached forever.
+// looks like at a glance. We cache the raw pixel buffer (Uint8ClampedArray)
+// instead of the canvas itself — DOM appendChild moves nodes rather than
+// copying them, so a cached canvas reused by two pickers (e.g. 'value'
+// appears in both Patches and Micro) ends up parented to whichever row
+// was built last, leaving the other empty / black.
 const _NOISE_THUMB_CACHE = new Map();
 function generateNoiseThumbnail(patternName, size = 48) {
   const key = patternName + ':' + size;
-  const cached = _NOISE_THUMB_CACHE.get(key);
-  if (cached) return cached;
-  const factory = NOISE_PATTERNS[patternName] || NOISE_PATTERNS.value;
-  // Period = 6 reads as "patches" at 48² — chunky enough that ridged /
-  // worley / warp show their character clearly. Same period across
-  // patterns so visual differences are pattern-driven, not scale-driven.
-  const noise = factory(7, 6);
+  let pixels = _NOISE_THUMB_CACHE.get(key);
+  if (!pixels) {
+    const factory = NOISE_PATTERNS[patternName] || NOISE_PATTERNS.value;
+    // Period = 6 reads as "patches" at 48² — chunky enough that ridged /
+    // worley / warp show their character clearly. Same period across
+    // patterns so visual differences are pattern-driven, not scale-driven.
+    const noise = factory(7, 6);
+    pixels = new Uint8ClampedArray(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      const v = y / size;
+      for (let x = 0; x < size; x++) {
+        const u = x / size;
+        // Worley returns distance — invert so feature points read bright
+        // (more visually interesting than dark spots on grey).
+        let n = noise(u, v);
+        if (patternName === 'worley') n = 1 - n;
+        const c = Math.max(0, Math.min(255, n * 255));
+        const o = (y * size + x) * 4;
+        pixels[o    ] = c;
+        pixels[o + 1] = c;
+        pixels[o + 2] = c;
+        pixels[o + 3] = 255;
+      }
+    }
+    _NOISE_THUMB_CACHE.set(key, pixels);
+  }
   const cv = document.createElement('canvas');
   cv.width = size; cv.height = size;
   const ctx = cv.getContext('2d');
-  const img = ctx.createImageData(size, size);
-  const data = img.data;
-  for (let y = 0; y < size; y++) {
-    const v = y / size;
-    for (let x = 0; x < size; x++) {
-      const u = x / size;
-      // Worley returns distance — invert so feature points read bright
-      // (more visually interesting than dark spots on grey).
-      let n = noise(u, v);
-      if (patternName === 'worley') n = 1 - n;
-      const c = Math.max(0, Math.min(255, n * 255));
-      const o = (y * size + x) * 4;
-      data[o    ] = c;
-      data[o + 1] = c;
-      data[o + 2] = c;
-      data[o + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  _NOISE_THUMB_CACHE.set(key, cv);
+  // ImageData expects a Uint8ClampedArray of the exact length — wrap the
+  // cached buffer so we don't pay a copy on every reuse.
+  ctx.putImageData(new ImageData(pixels, size, size), 0, 0);
   return cv;
 }
 
@@ -9973,37 +9979,59 @@ buildParamGroup('Leaf Material');
     return leafSilhouetteEditor;
   };
 
-  // Color pickers for fill + veins.
+  // Color pickers for fill + veins. Apple-style circular swatches: the
+  // visible swatch is a round div with the native `input[type="color"]`
+  // overlaid invisibly on top, so clicking the swatch opens the OS picker.
+  // Pattern mirrors `.lc-color-row` from the leaf-creator panel but uses
+  // round swatches and a stacked label / value layout.
   const colorRow = document.createElement('div');
   colorRow.className = 'leaf-color-row';
-  // Track each picker's input so external state changes (species switch,
-  // snapshot restore, history undo) can sync the swatch back to P.leafProfile.
-  // Without this, picking Cherry leaves the picker stuck on the previous
-  // species' colour even though the live texture re-bakes correctly.
-  const _colorInputs = {};
-  const mkColor = (label, key) => {
-    const lab = document.createElement('label');
-    lab.className = 'leaf-color';
+  // Track refs so external state changes (species switch, snapshot restore,
+  // history undo) can sync both the swatch background and input value back
+  // to P.leafProfile. Without this, picking Cherry leaves the picker stuck
+  // on the previous species' colour even though the live texture re-bakes.
+  const _colorRefs = {};
+  const mkColor = (label, key, fallback) => {
+    const cell = document.createElement('label');
+    cell.className = 'leaf-color';
+    const sw = document.createElement('span');
+    sw.className = 'leaf-color-sw';
+    const initial = P.leafProfile[key] || fallback;
+    sw.style.background = initial;
+    const meta = document.createElement('span');
+    meta.className = 'leaf-color-meta';
     const txt = document.createElement('span');
+    txt.className = 'leaf-color-name';
     txt.textContent = label;
+    const val = document.createElement('span');
+    val.className = 'leaf-color-val';
+    val.textContent = initial.toUpperCase();
+    meta.append(txt, val);
     const inp = document.createElement('input');
     inp.type = 'color';
-    inp.value = P.leafProfile[key] || (key === 'color' ? '#4a7a3a' : '#2f4a22');
+    inp.value = initial;
     inp.addEventListener('input', () => {
       P.leafProfile[key] = inp.value;
+      sw.style.background = inp.value;
+      val.textContent = inp.value.toUpperCase();
       applyLeafShape();
       renderPreview();
       render3DPreview();
       markRenderDirty(2);
     });
-    _colorInputs[key] = inp;
-    lab.append(txt, inp);
-    return lab;
+    _colorRefs[key] = { inp, sw, val, fallback };
+    cell.append(sw, meta, inp);
+    return cell;
   };
-  colorRow.append(mkColor('Color', 'color'), mkColor('Vein', 'veinColor'));
+  colorRow.append(mkColor('Fill', 'color', '#4a7a3a'), mkColor('Veins', 'veinColor', '#2f4a22'));
   const _syncLeafColorPickers = () => {
-    if (_colorInputs.color)     _colorInputs.color.value     = P.leafProfile.color     || '#4a7a3a';
-    if (_colorInputs.veinColor) _colorInputs.veinColor.value = P.leafProfile.veinColor || '#2f4a22';
+    for (const key of Object.keys(_colorRefs)) {
+      const r = _colorRefs[key];
+      const v = P.leafProfile[key] || r.fallback;
+      r.inp.value = v;
+      r.sw.style.background = v;
+      r.val.textContent = v.toUpperCase();
+    }
   };
   // Color picker is shared across every procedural shape (Oak, Maple, …,
   // Custom) — hidden only for Texture / Upload modes which bring their own
@@ -10219,6 +10247,7 @@ buildParamGroup('Leaf Material');
   _refreshLeafShapePanel = () => {
     select.value = P.leafShape;
     syncCustom();
+    _syncLeafColorPickers();
     renderPreview();
     render3DPreview();
   };
