@@ -2245,18 +2245,15 @@ function applyTheme(name) {
     new THREE.PlaneGeometry(18, 18),
     new THREE.MeshBasicMaterial({
       map: tex, transparent: true, depthWrite: false,
-      // Polygon offset pulls the contact shadow forward in the depth buffer
-      // so it never z-fights with the ground plane, even at grazing angles
-      // where 2cm of world offset isn't enough at low precision.
-      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+      // No polygon offset — the previous -4/-4 was pulling the shadow
+      // forward in the depth buffer enough that it rendered OVER the
+      // bottom rings of any vertical geometry (trunk base, avatar legs),
+      // producing a dark band wherever an object met the ground. A small
+      // physical y-offset is enough to clear z-fight with the cyc.
     }),
   );
   shadowMesh.rotation.x = -Math.PI / 2;
-  // Was 0.05 — that lifted the contact shadow 5 cm above the floor and
-  // produced a visible dark strip across the bottom of any standing
-  // geometry (trunk base + avatar legs in y=0..0.05). Sit it directly on
-  // the floor; polygonOffset (above) keeps it from z-fighting the cyc.
-  shadowMesh.position.y = 0.001;
+  shadowMesh.position.y = 0.002;
   shadowMesh.renderOrder = 1;
   scene.add(shadowMesh);
 }
@@ -2373,55 +2370,102 @@ for (const t of [_barkImgAlbedo, _barkImgNormal]) {
 // patterns (perfectly periodic by construction).
 const _BARK_TEX_CACHE = new Map();
 
-// Frequencies tuned for a default 0.5 tiles/m repeat = 2 m per tile. With
-// e.g. oak's vertFreq 4 that lands ~2 fissures per metre of trunk (50 cm
-// apart), which reads as proper hardwood bark at 5-15 m camera distance
-// instead of fine-grain noise.
+// Recipes tuned for default 0.5 tiles/m repeat (2 m per tile) at 5-15 m
+// camera distance. Each recipe targets a real-tree-bark archetype:
 const BARK_STYLES = {
+  // White / English oak — deep gnarled vertical fissures separating
+  // rough plates, with occasional perpendicular cross-cracks. Cool
+  // brown-grey, busy micro surface.
   oak: {
-    vertFreq: 4, vertSharp: 6, vertWobble: 0.05, vertDepth: 0.45,
-    horizFreq: 6, horizSharp: 1, horizAmp: 0.12,
-    largeFreq: 1.5, largeAmp: 0.20,
-    microFreq: 28, microAmp: 0.06,
-    palette: [[36, 28, 20], [88, 72, 55], [148, 130, 105]],
-    normalStrength: 4.5,
+    vertFreq: 3.5, vertSharp: 8, vertWobble: 0.10, vertDepth: 0.62,
+    horizFreq: 4,  horizSharp: 8, horizAmp: 0.18,
+    largeFreq: 1.0, largeAmp: 0.28,
+    microFreq: 36, microAmp: 0.09,
+    palette: [[24, 22, 20], [76, 66, 54], [138, 120, 98]],
+    normalStrength: 5.2,
+    grain: 8,
+  },
+  // Scots / red pine — wide reddish plates separated by deep cracks,
+  // moderate horizontal plate boundaries, big colour blotches between
+  // plates. Plate surfaces themselves are relatively smooth.
+  pine: {
+    vertFreq: 2,   vertSharp: 3, vertWobble: 0.18, vertDepth: 0.42,
+    horizFreq: 3,  horizSharp: 6, horizAmp: 0.36,
+    largeFreq: 0.8, largeAmp: 0.34,
+    microFreq: 16, microAmp: 0.04,
+    palette: [[58, 32, 18], [128, 78, 44], [200, 138, 78]],
+    normalStrength: 4.0,
     grain: 6,
   },
-  pine: {
-    vertFreq: 2.5, vertSharp: 1.5, vertWobble: 0.12, vertDepth: 0.32,
-    horizFreq: 3.5, horizSharp: 3, horizAmp: 0.45,
-    largeFreq: 1.2, largeAmp: 0.22,
-    microFreq: 22, microAmp: 0.05,
-    palette: [[48, 28, 18], [115, 75, 48], [175, 130, 88]],
-    normalStrength: 3.5,
+  // Paper birch — smooth white papery surface broken by sharp dark
+  // horizontal lenticels (thin streaks). Large patches simulate the
+  // peeling-paper colour shifts. Very low relief, high contrast.
+  birch: {
+    vertFreq: 0,   vertSharp: 0, vertWobble: 0, vertDepth: 0,
+    horizFreq: 30, horizSharp: 18, horizAmp: 0.58,
+    largeFreq: 1.8, largeAmp: 0.36,
+    microFreq: 14, microAmp: 0.02,
+    palette: [[18, 16, 14], [218, 212, 204], [248, 246, 240]],
+    normalStrength: 1.2,
+    grain: 4,
+  },
+  // Black / sweet cherry — smooth deep red-brown with characteristic
+  // horizontal lenticel bands ("rings"). Almost no vertical pattern.
+  cherry: {
+    vertFreq: 0,   vertSharp: 0, vertWobble: 0, vertDepth: 0,
+    horizFreq: 22, horizSharp: 8, horizAmp: 0.30,
+    largeFreq: 2,  largeAmp: 0.22,
+    microFreq: 16, microAmp: 0.03,
+    palette: [[56, 24, 16], [125, 65, 42], [180, 110, 78]],
+    normalStrength: 1.6,
+    grain: 4,
+  },
+  // Beech / olive — almost smooth, subtle weathered patches and a
+  // muted grey-warm gradient. Nothing reads as a feature; everything
+  // is gentle gradients.
+  smooth: {
+    vertFreq: 0,   vertSharp: 0, vertWobble: 0, vertDepth: 0,
+    horizFreq: 0,  horizSharp: 0, horizAmp: 0,
+    largeFreq: 1.5, largeAmp: 0.34,
+    microFreq: 14, microAmp: 0.04,
+    palette: [[100, 96, 90], [160, 156, 148], [205, 200, 192]],
+    normalStrength: 0.8,
     grain: 5,
   },
-  birch: {
-    vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
-    horizFreq: 22, horizSharp: 16, horizAmp: 0.50,
-    largeFreq: 2, largeAmp: 0.30,
-    microFreq: 18, microAmp: 0.025,
-    palette: [[35, 30, 26], [205, 200, 192], [242, 240, 234]],
-    normalStrength: 0.9,
-    grain: 4,
-  },
-  cherry: {
-    vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
-    horizFreq: 28, horizSharp: 6, horizAmp: 0.20,
-    largeFreq: 2.5, largeAmp: 0.18,
-    microFreq: 20, microAmp: 0.04,
-    palette: [[55, 30, 22], [108, 60, 45], [158, 100, 78]],
+  // Eucalyptus / paperbark — irregular peeling patches in multiple
+  // shades, mild vertical hint, low relief. Big-amp large patches drive
+  // the iconic mottled multi-colour look.
+  eucalyptus: {
+    vertFreq: 1.5, vertSharp: 2, vertWobble: 0.20, vertDepth: 0.18,
+    horizFreq: 0,  horizSharp: 0, horizAmp: 0,
+    largeFreq: 0.6, largeAmp: 0.55,
+    microFreq: 22, microAmp: 0.05,
+    palette: [[90, 70, 50], [165, 130, 95], [225, 195, 160]],
     normalStrength: 1.4,
-    grain: 4,
+    grain: 7,
   },
-  smooth: {
-    vertFreq: 0, vertSharp: 0, vertWobble: 0, vertDepth: 0,
+  // Palm — fibrous vertical strands that wrap around the trunk in a
+  // diamond pattern; horizontal bands mark old leaf scars where fronds
+  // once attached.
+  palm: {
+    vertFreq: 14, vertSharp: 4, vertWobble: 0.04, vertDepth: 0.18,
+    horizFreq: 6, horizSharp: 4, horizAmp: 0.32,
+    largeFreq: 0.8, largeAmp: 0.16,
+    microFreq: 30, microAmp: 0.05,
+    palette: [[60, 45, 30], [110, 88, 62], [165, 138, 98]],
+    normalStrength: 2.4,
+    grain: 5,
+  },
+  // Coast redwood / sequoia — long thin vertical fibrous strips, very
+  // sharp deep grooves, warm cinnamon-red colour. Tall straight pattern.
+  redwood: {
+    vertFreq: 8,  vertSharp: 9, vertWobble: 0.03, vertDepth: 0.55,
     horizFreq: 0, horizSharp: 0, horizAmp: 0,
-    largeFreq: 2, largeAmp: 0.30,
-    microFreq: 18, microAmp: 0.04,
-    palette: [[110, 105, 98], [165, 160, 152], [205, 200, 192]],
-    normalStrength: 0.7,
-    grain: 4,
+    largeFreq: 1.2, largeAmp: 0.22,
+    microFreq: 24, microAmp: 0.05,
+    palette: [[60, 28, 18], [128, 70, 40], [185, 118, 72]],
+    normalStrength: 4.5,
+    grain: 5,
   },
 };
 
@@ -2467,23 +2511,27 @@ function _makeTilableNoise(seed, period) {
 //      so it doesn't get wiped by a later swap.
 function generateBarkTexture(style = 'oak', seed = 1) {
   // Merge: start with the style preset's full recipe, then override any
-  // field with the matching P.bark* slider. This way the dropdown gives
-  // sensible starting points and individual sliders refine.
+  // field with the matching P.bark* slider. P is declared further down
+  // the file (~line 3634); during the initial bark paint at startup
+  // it's still in the temporal dead zone, so guard with try/catch and
+  // fall through to recipe-only on TDZ ReferenceError.
   const recipe = BARK_STYLES[style] || BARK_STYLES.oak;
+  let Ps;
+  try { Ps = P; } catch { Ps = {}; }
   const p = {
-    vertFreq:    P.barkVertFreq     ?? recipe.vertFreq,
-    vertSharp:   P.barkVertSharp    ?? recipe.vertSharp,
-    vertWobble:  P.barkVertWobble   ?? recipe.vertWobble,
-    vertDepth:   P.barkVertDepth    ?? recipe.vertDepth,
-    horizFreq:   P.barkHorizFreq    ?? recipe.horizFreq,
-    horizSharp:  P.barkHorizSharp   ?? recipe.horizSharp,
-    horizAmp:    P.barkHorizAmp     ?? recipe.horizAmp,
-    largeFreq:   P.barkLargeFreq    ?? recipe.largeFreq,
-    largeAmp:    P.barkLargeAmp     ?? recipe.largeAmp,
-    microFreq:   P.barkMicroFreq    ?? recipe.microFreq,
-    microAmp:    P.barkMicroAmp     ?? recipe.microAmp,
-    normalStrength: P.barkBumpStrength ?? recipe.normalStrength,
-    grain:       P.barkGrain        ?? recipe.grain,
+    vertFreq:    Ps.barkVertFreq     ?? recipe.vertFreq,
+    vertSharp:   Ps.barkVertSharp    ?? recipe.vertSharp,
+    vertWobble:  Ps.barkVertWobble   ?? recipe.vertWobble,
+    vertDepth:   Ps.barkVertDepth    ?? recipe.vertDepth,
+    horizFreq:   Ps.barkHorizFreq    ?? recipe.horizFreq,
+    horizSharp:  Ps.barkHorizSharp   ?? recipe.horizSharp,
+    horizAmp:    Ps.barkHorizAmp     ?? recipe.horizAmp,
+    largeFreq:   Ps.barkLargeFreq    ?? recipe.largeFreq,
+    largeAmp:    Ps.barkLargeAmp     ?? recipe.largeAmp,
+    microFreq:   Ps.barkMicroFreq    ?? recipe.microFreq,
+    microAmp:    Ps.barkMicroAmp     ?? recipe.microAmp,
+    normalStrength: Ps.barkBumpStrength ?? recipe.normalStrength,
+    grain:       Ps.barkGrain        ?? recipe.grain,
     palette:     recipe.palette,    // colour stops still come from preset
   };
   // Cache key includes every layer field so per-slider tweaks each get
@@ -2497,7 +2545,12 @@ function generateBarkTexture(style = 'oak', seed = 1) {
   const cached = _BARK_TEX_CACHE.get(key);
   if (cached) return cached;
 
-  const N = 512;
+  // 256² regen runs in 15-25 ms instead of 50-100 ms at 512² — fast
+  // enough that the main thread doesn't visibly stall during slider
+  // drags. Bark detail at typical viewing distance is dominated by the
+  // normal map's lighting response, not the texel grid; the size drop is
+  // hard to spot. Bump back to 512 if hero shots demand it.
+  const N = 256;
 
   try {
     // Tilable noise — pre-built grids at multiple scales.
@@ -3521,24 +3574,35 @@ function _loadBarkPreset(name) {
   P.barkBumpStrength = recipe.normalStrength;
   P.barkGrain        = recipe.grain;
 }
+// rAF coalescer — slider drags fire applyBarkMaterial up to 60×/s; each
+// regen costs ~50-100 ms. Without this, the queue of onAfter callbacks
+// stacks faster than the generator drains, locking the UI. With it, the
+// next regen runs at most once per animation frame using whatever values
+// P holds at that moment.
+let _barkRegenPending = false;
 function applyBarkStyle() {
   const style = P.barkStyle || 'oak';
-  // First-time entry OR style preset switch → load the preset values
-  // into the per-layer sliders so they reflect the active style. After
-  // that, layer-slider edits stand on their own.
+  // Style preset switch → load the preset values into the per-layer
+  // sliders so they reflect the active style. After that, layer-slider
+  // edits stand on their own.
   if (style !== _activeBarkStyle) {
     _loadBarkPreset(style);
     _activeBarkStyle = style;
-    // Refresh any rendered slider rows so the UI shows new values.
     if (typeof syncUI === 'function') syncUI();
   }
-  const seed = P.barkSeed ?? 1;
-  const tex = generateBarkTexture(style, seed);
-  if (!tex) return; // generator failed — keep the previous bark
-  barkAlbedo.image = tex.albedoCanvas;
-  barkNormal.image = tex.normalCanvas;
-  barkAlbedo.needsUpdate = true;
-  barkNormal.needsUpdate = true;
+  if (_barkRegenPending) return;
+  _barkRegenPending = true;
+  requestAnimationFrame(() => {
+    _barkRegenPending = false;
+    const s = P.barkStyle || 'oak';
+    const seed = P.barkSeed ?? 1;
+    const tex = generateBarkTexture(s, seed);
+    if (!tex) return; // generator failed — keep the previous bark
+    barkAlbedo.image = tex.albedoCanvas;
+    barkNormal.image = tex.normalCanvas;
+    barkAlbedo.needsUpdate = true;
+    barkNormal.needsUpdate = true;
+  });
 }
 
 function applyBarkMaterial() {
@@ -10861,10 +10925,10 @@ addSectionLabel('Bush', 'bush', 'sprout');
 buildBushGroup('Bush Shape');
 buildBushGroup('Bush Foliage');
 
-// 6. Bark — procedural style picker + surface / shading material card
+// 6. Bark — single consolidated card. All 30 controls inside, ordered
+// Style → Pattern → Color → Surface → Mapping → Moss top-down.
 addSectionLabel('Bark', null, 'layers');
-buildParamGroup('Bark Style');
-buildParamGroup('Bark Material');
+buildParamGroup('Bark');
 
 // 7. Scene — lighting preset
 addSectionLabel('Scene', null, 'sun');

@@ -93,64 +93,49 @@ export const PARAM_SCHEMA = [
     // of horizontal branches. Niche; default off.
     { key: 'reactionWood',   label: 'Reaction wood',  min: 0, max: 1,   step: 0.02, default: 0, tubesOnly: true, hidden: true },
   ]},
-  // Procedural bark texture generator — picks a recipe (oak / pine / birch /
-  // cherry / smooth) and a seed; the generator builds tilable albedo +
-  // normal canvases on the fly and swaps them into barkMat. Caching means
-  // a repeated style is free after the first run.
-  { group: 'Bark Style', params: [
-    // Style preset — picks a starting point. Switching it loads the
-    // preset's values into all the per-layer sliders below; you tune
-    // from there.
-    { key: 'barkStyle', label: 'Style preset', type: 'select',
-      options: ['oak', 'pine', 'birch', 'cherry', 'smooth'], default: 'oak', live: true },
-    { key: 'barkSeed',  label: 'Variation', min: 1, max: 50, step: 1, default: 1, live: true },
-    { key: 'barkRotation', label: 'Grain angle', min: -90, max: 90, step: 1, default: 0, live: true },
-  ]},
-  // Layered procedural bark — Redshift-style stack. Each layer
-  // contributes to a height field that drives both albedo (palette
-  // interpolation) and normal map (central differences). 0-frequency
-  // disables a layer. Defaults match the 'oak' preset; switching
-  // `barkStyle` repopulates these. Each slider triggers a debounced
-  // texture regen via the live-onAfter path.
-  { group: 'Bark Layers', params: [
-    { key: 'barkVertFreq',     label: 'Fissures freq',      min: 0,   max: 20,  step: 0.25, default: 4,    live: true },
-    { key: 'barkVertSharp',    label: 'Fissures sharpness', min: 0.5, max: 12,  step: 0.5,  default: 6,    live: true },
-    { key: 'barkVertDepth',    label: 'Fissures depth',     min: 0,   max: 1,   step: 0.02, default: 0.45, live: true },
-    { key: 'barkVertWobble',   label: 'Fissures wobble',    min: 0,   max: 0.3, step: 0.01, default: 0.05, live: true },
-    { key: 'barkHorizFreq',    label: 'Bands freq',         min: 0,   max: 100, step: 1,    default: 6,    live: true },
-    { key: 'barkHorizSharp',   label: 'Bands sharpness',    min: 0.5, max: 20,  step: 0.5,  default: 1,    live: true },
-    { key: 'barkHorizAmp',     label: 'Bands amount',       min: 0,   max: 0.6, step: 0.02, default: 0.12, live: true },
-    { key: 'barkLargeFreq',    label: 'Patches freq',       min: 0,   max: 6,   step: 0.1,  default: 1.5,  live: true },
-    { key: 'barkLargeAmp',     label: 'Patches amount',     min: 0,   max: 0.6, step: 0.02, default: 0.20, live: true },
-    { key: 'barkMicroFreq',    label: 'Micro freq',         min: 0,   max: 80,  step: 1,    default: 28,   live: true },
-    { key: 'barkMicroAmp',     label: 'Micro amount',       min: 0,   max: 0.2, step: 0.005,default: 0.06, live: true },
-    { key: 'barkBumpStrength', label: 'Bump strength',      min: 0,   max: 8,   step: 0.1,  default: 4.5,  live: true },
-    { key: 'barkGrain',        label: 'Grain',              min: 0,   max: 30,  step: 0.5,  default: 6,    live: true },
-  ]},
-  { group: 'Bark Material', params: [
-    { key: 'barkHue',            label: 'Hue',          min: 0, max: 1,   step: 0.01, default: 0.08, live: true },
-    { key: 'barkTint',           label: 'Tint',         min: 0, max: 1,   step: 0.02, default: 0,    live: true },
-    // Albedo-side controls (mirror of Normal strength on the normal map).
-    // Brightness multiplies the final RGB; saturation is a luminance-
-    // preserving punch / mute. Both apply to the procedural texture
-    // post-sample so changes are instant — no regen.
-    { key: 'barkBrightness',     label: 'Brightness',   min: 0.3, max: 2,   step: 0.02, default: 1.0,  live: true },
-    { key: 'barkSaturation',     label: 'Saturation',   min: 0,   max: 2,   step: 0.02, default: 1.0,  live: true },
-    { key: 'barkRoughness',      label: 'Roughness',    min: 0.2, max: 1, step: 0.02, default: 0.95, live: true },
-    { key: 'barkNormalStrength', label: 'Normal',       min: 0, max: 2.5, step: 0.05, default: 1.0,  live: true },
-    // UVs are in world meters. These sliders are "tiles per meter" on each
-    // axis. Lower = bigger bark tiles. Same density on any branch thickness.
-    // Tile density. Default 0.5 = 1 tile every 2 m. Combined with the
-    // recipe's per-tile cycle counts (oak 4 fissures, pine 2.5 plates,
-    // birch 22 lenticels) this produces real-tree-scale bark patterns at
-    // typical 5-15 m viewing distance. Lower = bigger / chunkier tiles.
-    { key: 'barkTexScaleU',      label: 'Tiles/m along',  min: 0.2, max: 8,  step: 0.1, default: 0.5, live: true },
-    { key: 'barkTexScaleV',      label: 'Tiles/m around', min: 0.2, max: 8,  step: 0.1, default: 0.5, live: true },
-    // Moss / lichen world-up blend
-    { key: 'mossAmount',         label: 'Moss amount',  min: 0, max: 1,   step: 0.02, default: 0,    live: true },
-    { key: 'mossThreshold',      label: 'Moss coverage',min: 0.1, max: 0.9,step: 0.02,default: 0.4,  live: true },
-    { key: 'mossHue',            label: 'Moss hue',     min: 0, max: 1,   step: 0.01, default: 0.3,  live: true },
-    { key: 'mossLum',            label: 'Moss bright.', min: 0.05,max: 0.6,step: 0.02,default: 0.25, live: true },
+  // ---- Bark — single consolidated card --------------------------------
+  // All 30 bark/moss controls in one collapsible card, ordered top-down
+  // by industry-standard material-editor flow: Style → Pattern (3 layers)
+  // → Color → Surface → Mapping → Moss. Comments mark each subsection
+  // for readability.
+  { group: 'Bark', params: [
+    // ── Style ──
+    { key: 'barkStyle', label: 'Preset', type: 'select',
+      options: ['oak', 'pine', 'birch', 'cherry', 'smooth', 'eucalyptus', 'palm', 'redwood'], default: 'oak', live: true },
+    { key: 'barkSeed', label: 'Variation seed', min: 1, max: 50, step: 1, default: 1, live: true },
+    // ── Fissures (vertical layer) ──
+    { key: 'barkVertFreq',   label: 'Fissure freq',     min: 0,   max: 20,  step: 0.25, default: 4,    live: true },
+    { key: 'barkVertSharp',  label: 'Fissure sharp',    min: 0.5, max: 12,  step: 0.5,  default: 6,    live: true },
+    { key: 'barkVertDepth',  label: 'Fissure depth',    min: 0,   max: 1,   step: 0.02, default: 0.45, live: true },
+    { key: 'barkVertWobble', label: 'Fissure wobble',   min: 0,   max: 0.3, step: 0.01, default: 0.05, live: true },
+    // ── Bands (horizontal layer) ──
+    { key: 'barkHorizFreq',  label: 'Band freq',        min: 0,   max: 100, step: 1,    default: 6,    live: true },
+    { key: 'barkHorizSharp', label: 'Band sharp',       min: 0.5, max: 20,  step: 0.5,  default: 1,    live: true },
+    { key: 'barkHorizAmp',   label: 'Band amount',      min: 0,   max: 0.6, step: 0.02, default: 0.12, live: true },
+    // ── Detail (patches + micro + grain + bump) ──
+    { key: 'barkLargeFreq',    label: 'Patches freq',   min: 0, max: 6,   step: 0.1,   default: 1.5,  live: true },
+    { key: 'barkLargeAmp',     label: 'Patches amount', min: 0, max: 0.6, step: 0.02,  default: 0.20, live: true },
+    { key: 'barkMicroFreq',    label: 'Micro freq',     min: 0, max: 80,  step: 1,     default: 28,   live: true },
+    { key: 'barkMicroAmp',     label: 'Micro amount',   min: 0, max: 0.2, step: 0.005, default: 0.06, live: true },
+    { key: 'barkGrain',        label: 'Grain',          min: 0, max: 30,  step: 0.5,   default: 6,    live: true },
+    { key: 'barkBumpStrength', label: 'Bump strength',  min: 0, max: 8,   step: 0.1,   default: 4.5,  live: true },
+    // ── Color ──
+    { key: 'barkHue',        label: 'Hue',         min: 0,   max: 1,   step: 0.01, default: 0.08, live: true },
+    { key: 'barkTint',       label: 'Tint amount', min: 0,   max: 1,   step: 0.02, default: 0,    live: true },
+    { key: 'barkBrightness', label: 'Brightness',  min: 0.3, max: 2,   step: 0.02, default: 1.0,  live: true },
+    { key: 'barkSaturation', label: 'Saturation',  min: 0,   max: 2,   step: 0.02, default: 1.0,  live: true },
+    // ── Surface ──
+    { key: 'barkRoughness',      label: 'Roughness',    min: 0.2, max: 1,   step: 0.02, default: 0.95, live: true },
+    { key: 'barkNormalStrength', label: 'Normal scale', min: 0,   max: 2.5, step: 0.05, default: 1.0,  live: true },
+    // ── Mapping ──
+    { key: 'barkTexScaleU', label: 'Tiles/m along',  min: 0.2, max: 8,  step: 0.1, default: 0.5, live: true },
+    { key: 'barkTexScaleV', label: 'Tiles/m around', min: 0.2, max: 8,  step: 0.1, default: 0.5, live: true },
+    { key: 'barkRotation',  label: 'Grain angle',    min: -90, max: 90, step: 1,   default: 0,   live: true },
+    // ── Moss ──
+    { key: 'mossAmount',    label: 'Moss amount',     min: 0,    max: 1,   step: 0.02, default: 0,    live: true },
+    { key: 'mossThreshold', label: 'Moss coverage',   min: 0.1,  max: 0.9, step: 0.02, default: 0.4,  live: true },
+    { key: 'mossHue',       label: 'Moss hue',        min: 0,    max: 1,   step: 0.01, default: 0.3,  live: true },
+    { key: 'mossLum',       label: 'Moss brightness', min: 0.05, max: 0.6, step: 0.02, default: 0.25, live: true },
   ]},
   { group: 'Leaves', treeType: 'broadleaf', params: [
     // Quantity & placement.
@@ -455,35 +440,36 @@ export const SPECIES = {
     ],
   },
   Cherry: {
-    // Prunus: ornamental cherry with a vase-form Y silhouette. The trunk
-    // ends in a small cluster of co-dominant primaries that spread upward
-    // and outward — that's the classic "Y at top" look. Flowers bloom
-    // before leaves (season 0.05 = pink cloud).
+    // Prunus: ornamental cherry in full bloom. Mushroom-domed crown sitting
+    // atop a clean trunk — the classic blossoming-sakura silhouette. Flowers
+    // bloom before leaves (season 0.05 = spring), and leafHueShift rotates
+    // the seasonal tint to sakura pink (formula mixes by |hueShift|*3 at low
+    // season values, so -0.3 lands a saturated pink even with no foliage tint).
     //
-    // Key levers for the Y read:
-    //   • L1 children=3, lenRatio=0.9 → few but long primaries.
-    //   • L1 angle=0.5, angleDecline=-0.4 → primaries near-vertical at tip.
-    //   • L1 startPlacement=0.6, densityPoints heavy at top → bare trunk
-    //     below, primaries cluster at the apex.
-    //   • L1 apicalDominance=0.0 → don't kill the side primaries.
-    //   • L1 apicalContinue=0 → no central leader overriding the fork.
-    //   • Sparse children at deeper levels keep the silhouette readable.
+    // Key levers for the dome read:
+    //   • L1 children=6, angle=0.85 → many primaries spreading outward, not a Y.
+    //   • L1 angleDecline=-0.1, curveBack=-0.25 → gentle upward arch, not a hard fork.
+    //   • shape='spherical', baseSize=0.7 → wide flat-topped envelope.
+    //   • L1 startPlacement=0.55 → bare lower trunk, dome rides high.
+    //   • L1 apicalDominance=0.0, apicalContinue=0 → no central leader.
     type: 'broadleaf', barkStyle: 'cherry',
-    trunkHeight: 8.5, trunkScale: 1.3, tipRadius: 0.005, alloExp: 2.35, rootFlare: 0.4,
+    trunkHeight: 7.5, trunkScale: 1.3, tipRadius: 0.005, alloExp: 2.35, rootFlare: 0.4,
     trunkJitter: 0.05,
     globalScale: 0.95,
-    shape: 'free', baseSize: 0.55,
+    shape: 'spherical', baseSize: 0.7,
     leafShape: 'Oval',
     leafSize: 0.11, leafSpread: 0.4, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.15,
     leavesPerTip: 28, leafChainSteps: 9, leavesStart: 0, season: 0.05,
     leafClusterSize: 5, leafClusterSpread: 0.75,
     leafPhyllotaxis: 'alternate',
+    leafHueShift: -0.3, leafColorVar: 0.08,
     pruneMode: 'off',
     levels: [
-      // L1 — the Y. Three long primaries clustered near the trunk apex,
-      // angled out then bending up via curveBack. Density curve hands them
-      // entirely to the top of the trunk.
-      withLevel({ children: 3, lenRatio: 0.9, angle: 0.5, angleVar: 0.18, rollVar: 0.5, startPlacement: 0.6, endPlacement: 1, apicalDominance: 0, apicalContinue: 0, angleDecline: -0.4, distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.0, curveMode: 'backCurve', curveAmount: 0.35, curveBack: -0.6, segSplits: 0, susceptibility: 1.4, gravitropism: -0.05, phototropism: 0.05, densityPoints: [0, 0.1, 0.5, 1, 1], lengthPoints: [0.95, 1, 1, 0.95, 0.85] }),
+      // L1 — primary scaffold. Six primaries fan outward from the trunk apex
+      // with a gentle upward arch, forming the umbrella dome of a blossoming
+      // cherry. Density still concentrates on the top of the trunk so the
+      // lower trunk reads as bare.
+      withLevel({ children: 6, lenRatio: 0.85, angle: 0.85, angleVar: 0.18, rollVar: 0.7, startPlacement: 0.55, endPlacement: 1, apicalDominance: 0, apicalContinue: 0, angleDecline: -0.1, distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.0, curveMode: 'backCurve', curveAmount: 0.3, curveBack: -0.25, segSplits: 0.1, splitAngle: 0.3, susceptibility: 1.4, gravitropism: -0.02, phototropism: 0.04, densityPoints: [0, 0.2, 0.6, 1, 1], lengthPoints: [0.9, 1, 1, 0.95, 0.85] }),
       // L2 — secondary scaffold off each primary. Spreading crown fan.
       withLevel({ children: 10, lenRatio: 0.62, angle: 0.95, angleVar: 0.25, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.1, distortion: 0.24, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.35, curveBack: -0.2, segSplits: 0.2, splitAngle: 0.35, gravitropism: 0.03, susceptibility: 1.5, densityPoints: [0.45, 0.9, 1, 1, 0.85] }),
       withLevel({ children: 8, lenRatio: 0.55, angle: 0.7, startPlacement: 0.2, endPlacement: 1, distortion: 0.22, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.3, segSplits: 0.15, splitAngle: 0.32, gravitropism: 0.05, densityPoints: [0.55, 0.9, 1, 1, 0.8] }),
@@ -951,7 +937,7 @@ export const SPECIES = {
     ],
   },
   Pine: {
-    type: 'conifer', barkStyle: 'pine', barkStyle: 'pine', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'pine',
     trunkHeight: 14, trunkScale: 1.25, tipRadius: 0.022, alloExp: 2.6, rootFlare: 0.5,
     shape: 'conical', baseSize: 0.15,
     leafSize: 0.18, leafFacing: 0.65, leavesPerTip: 26, leafChainSteps: 5, season: 0.2,
@@ -967,7 +953,7 @@ export const SPECIES = {
     cConeCount: 12, cConeSize: 0.22, cConeHang: 0.7,
   },
   Spruce: {
-    type: 'conifer', barkStyle: 'pine', barkStyle: 'pine', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'pine',
     trunkHeight: 16, trunkScale: 1.15, tipRadius: 0.02, alloExp: 2.7, rootFlare: 0.4,
     shape: 'conical', baseSize: 0.08,
     leafSize: 0.1, leafFacing: 0.8, leavesPerTip: 30, leafChainSteps: 5, season: 0.2,
@@ -983,7 +969,7 @@ export const SPECIES = {
     cConeCount: 10, cConeSize: 0.18, cConeHang: 0.8,
   },
   Cedar: {
-    type: 'conifer', barkStyle: 'pine', barkStyle: 'pine', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'pine',
     trunkHeight: 16, trunkScale: 1.35, tipRadius: 0.03, alloExp: 2.4, rootFlare: 0.7,
     shape: 'conical', baseSize: 0.2,
     leafSize: 0.14, leafFacing: 0.45, leavesPerTip: 22, leafChainSteps: 4, season: 0.2,
@@ -1017,7 +1003,7 @@ export const SPECIES = {
   },
   // --- Weber-Penn conifers ------------------------------------------------
   Fir: {
-    type: 'conifer', barkStyle: 'pine', barkStyle: 'pine', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'pine',
     trunkHeight: 18, trunkScale: 1.2, tipRadius: 0.02, alloExp: 2.8, rootFlare: 0.5,
     shape: 'conical', baseSize: 0.08,
     leafSize: 0.12, leafFacing: 0.78, leavesPerTip: 28, leafChainSteps: 5, season: 0.2,
@@ -1033,7 +1019,7 @@ export const SPECIES = {
     cConeCount: 9, cConeSize: 0.17, cConeHang: 0.75,
   },
   Larch: {
-    type: 'conifer', barkStyle: 'pine', barkStyle: 'pine', barkStyle: 'pine',
+    type: 'conifer', barkStyle: 'pine',
     trunkHeight: 15, trunkScale: 1.1, tipRadius: 0.022, alloExp: 2.55, rootFlare: 0.45,
     shape: 'conical', baseSize: 0.15,
     leafSize: 0.1, leafFacing: 0.4, leavesPerTip: 24, leafChainSteps: 4, season: 0.35,
@@ -1330,6 +1316,20 @@ export const PARAM_DESCRIPTIONS = {
   barkStyle:        'Procedural bark recipe. oak = deep vertical fissures + blocky scales. pine = overlapping reddish plates. birch = papery white with horizontal lenticels. cherry = smooth red-brown with lenticel rings. smooth = beech / olive — gentle gradient.',
   barkSeed:         'Seed for the procedural bark — same style + different seed gives a unique-looking variant. Generated textures are cached so repeated picks are free.',
   barkRotation:     'Tilt the bark grain. 0 = vertical (default). Positive angles spiral the pattern — handy for cedar, hickory, or just breaking up uniformity. Applied at sample time, no regen.',
+  // Bark Layers (procedural)
+  barkVertFreq:     'Vertical fissure layer — cycles per tile. 0 disables. Picking a Style preset overwrites this.',
+  barkVertSharp:    'Fissure sharpness — higher = thin crisp lines, lower = soft grooves.',
+  barkVertDepth:    'How deep the fissures cut into the height field. 0 = flat.',
+  barkVertWobble:   'Random sideways perturbation of each fissure — breaks the perfect-vertical sin pattern.',
+  barkHorizFreq:    'Horizontal band layer — cycles per tile. Use for lenticels (birch/cherry, sharp+small) or plates (pine, broad). 0 disables.',
+  barkHorizSharp:   'Band sharpness — higher = thin lenticel lines, lower = wide pine plates.',
+  barkHorizAmp:     'Band depth on the height field.',
+  barkLargeFreq:    'Large-patch layer — slow noise for peeling / weathered regions. Lower = bigger patches.',
+  barkLargeAmp:     'Large-patch strength.',
+  barkMicroFreq:    'Micro detail layer — fine bumps. Higher = busier surface.',
+  barkMicroAmp:     'Micro detail strength.',
+  barkBumpStrength: 'Multiplier on the height-field gradient when generating the normal map. Higher = exaggerated relief.',
+  barkGrain:        'Per-pixel albedo grain — breaks up flat colour regions.',
   // Radius
   tipRadius:        'Thickness of the smallest twigs',
   baseRadius:       'Trunk radius at ground — primary thickness dial',
