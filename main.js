@@ -127,7 +127,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 7, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
-controls.minDistance = 7;
+controls.minDistance = 0.5;
 controls.maxDistance = 200;
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.mouseButtons = {
@@ -2383,15 +2383,16 @@ const BARK_STYLES = {
     normalStrength: 5.2,
     grain: 8,
   },
-  // Scots / red pine — wide reddish plates separated by deep cracks,
-  // moderate horizontal plate boundaries, big colour blotches between
-  // plates. Plate surfaces themselves are relatively smooth.
+  // Scots / red pine — wide plates separated by deep cracks. Real Scots pine
+  // does have a coppery-bronze upper trunk but the lower trunk reads as a
+  // muted greyish brown — palette pulled in that direction so it doesn't look
+  // uniformly orange across the whole trunk.
   pine: {
     vertFreq: 2,   vertSharp: 3, vertWobble: 0.18, vertDepth: 0.42,
     horizFreq: 3,  horizSharp: 6, horizAmp: 0.36,
     largeFreq: 0.8, largeAmp: 0.34,
     microFreq: 16, microAmp: 0.04,
-    palette: [[58, 32, 18], [128, 78, 44], [200, 138, 78]],
+    palette: [[44, 36, 30], [108, 88, 70], [172, 144, 116]],
     normalStrength: 4.0,
     grain: 6,
   },
@@ -2514,14 +2515,15 @@ const BARK_STYLES = {
     normalStrength: 1.0,
     grain: 4,
   },
-  // Cedar / cypress — long stringy peeling vertical strips, soft dark
-  // reddish-brown. Less aggressive than redwood, more papery feel.
+  // Cedar / cypress — long stringy peeling vertical strips. Original palette
+  // leaned mahogany; toned down to a more neutral weathered brown so cedar +
+  // cypress don't read as orange next to greener landscaping.
   cedar: {
     vertFreq: 9,  vertSharp: 5, vertWobble: 0.10, vertDepth: 0.32,
     horizFreq: 1, horizSharp: 2, horizAmp: 0.10,
     largeFreq: 1.0, largeAmp: 0.24,
     microFreq: 26, microAmp: 0.06,
-    palette: [[78, 50, 36], [148, 100, 70], [205, 162, 122]],
+    palette: [[60, 50, 42], [122, 102, 86], [180, 158, 134]],
     normalStrength: 2.6,
     grain: 6,
   },
