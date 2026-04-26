@@ -2474,7 +2474,7 @@ const BARK_STYLES = {
     horizFreq: 0, horizSharp: 0, horizAmp: 0,
     largeFreq: 0.9, largeAmp: 0.62,
     microFreq: 18, microAmp: 0.04,
-    palette: [[110, 108, 88], [185, 180, 158], [228, 222, 200]],
+    palette: [[68, 64, 54], [125, 118, 102], [172, 162, 140]],
     normalStrength: 0.7,
     grain: 4,
   },
@@ -2486,30 +2486,31 @@ const BARK_STYLES = {
     horizFreq: 1.5, horizSharp: 4, horizAmp: 0.20,
     largeFreq: 1.4, largeAmp: 0.42,
     microFreq: 28, microAmp: 0.08,
-    palette: [[70, 70, 60], [128, 128, 110], [186, 186, 168]],
+    palette: [[55, 55, 46], [105, 105, 88], [150, 150, 130]],
     normalStrength: 3.8,
     grain: 7,
   },
-  // Maple (Acer) — finely fissured pewter-grey. Tighter and more uniform
-  // than oak's deep plates; reads as ridged but not gnarled.
+  // Maple (Acer) — finely fissured slate-grey-brown. Tighter and more
+  // uniform than oak's deep plates; reads as ridged but not gnarled.
+  // Real Acer rubrum has medium-dark grey-brown bark, not pewter.
   maple: {
     vertFreq: 5,  vertSharp: 6, vertWobble: 0.06, vertDepth: 0.42,
     horizFreq: 2,  horizSharp: 6, horizAmp: 0.10,
     largeFreq: 1.2, largeAmp: 0.20,
     microFreq: 32, microAmp: 0.06,
-    palette: [[55, 50, 48], [110, 104, 100], [170, 165, 160]],
+    palette: [[36, 32, 28], [80, 72, 64], [128, 116, 102]],
     normalStrength: 3.4,
     grain: 6,
   },
-  // Beech / hornbeam — silken near-mirror grey with very subtle
-  // horizontal lenticel rings + faint mottling. Almost no relief, more
-  // texture than 'smooth' so the trunk doesn't read as plastic.
+  // Beech / hornbeam — silken muted grey with very subtle horizontal
+  // lenticel rings + faint mottling. Almost no relief, more texture than
+  // 'smooth' so the trunk doesn't read as plastic.
   beech: {
     vertFreq: 0.4, vertSharp: 0.8, vertWobble: 0.20, vertDepth: 0.06,
     horizFreq: 14, horizSharp: 4, horizAmp: 0.12,
     largeFreq: 1.6, largeAmp: 0.18,
     microFreq: 22, microAmp: 0.04,
-    palette: [[80, 78, 74], [148, 146, 142], [212, 210, 206]],
+    palette: [[60, 58, 54], [118, 114, 108], [172, 168, 162]],
     normalStrength: 1.0,
     grain: 4,
   },
