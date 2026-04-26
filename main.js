@@ -2262,64 +2262,56 @@ function applyTheme(name) {
 // eyeball how big the tree actually is. Toggled via the left toolbar.
 let personRefMesh = null;
 {
-  // 2D anatomical silhouette in a 0..1.80 m Y, ~±0.27 m X frame
-  // (origin at feet center). Built from quadraticCurveTo segments so the
-  // bezier tessellation produces a smooth high-poly outline (curveSegments
-  // verts per curve) instead of the previous 32-point chunky polyline.
-  // Continuous front-view path: top of head -> right shoulder/arm/hand ->
-  // up inside arm -> right side of torso -> right leg -> right foot ->
-  // crotch -> left foot -> left leg -> torso -> left arm -> left shoulder
-  // -> left side of head -> close at top.
+  // 2D anatomical silhouette, 0..1.80 m Y, ~±0.26 m X (origin at feet
+  // centerline). Continuous quadraticCurveTo path so bezier tessellation
+  // gives a smooth high-poly outline. Hands sit at hip level (y ~ 0.80)
+  // and the inner-arm column stays outside the leg outer edge so the
+  // polygon never overlaps itself. Legs end at the ground — no feet.
   const shape = new THREE.Shape();
   shape.moveTo(0, 1.80);
   // --- Right side --------------------------------------------------------
   // Head: smooth oval, jaw curve to chin/neck
   shape.quadraticCurveTo(0.140, 1.795, 0.140, 1.66);
   shape.quadraticCurveTo(0.135, 1.555, 0.070, 1.520);
-  // Neck (slightly tapered)
+  // Neck
   shape.lineTo(0.060, 1.480);
   // Shoulder slope outward to deltoid
-  shape.quadraticCurveTo(0.140, 1.475, 0.235, 1.460);
-  // Outside of right arm — bicep bulge then taper to wrist
-  shape.quadraticCurveTo(0.265, 1.300, 0.235, 1.050);
-  shape.quadraticCurveTo(0.215, 0.850, 0.210, 0.720);
-  // Right hand (curl at hip level)
-  shape.quadraticCurveTo(0.215, 0.660, 0.185, 0.650);
-  shape.quadraticCurveTo(0.150, 0.650, 0.145, 0.700);
-  // Inside of right arm back up to armpit
-  shape.quadraticCurveTo(0.140, 0.850, 0.140, 1.050);
-  shape.lineTo(0.140, 1.300);
-  // Right side of torso: subtle waist tuck + hip flare
-  shape.quadraticCurveTo(0.130, 1.100, 0.142, 0.950);
-  shape.quadraticCurveTo(0.180, 0.920, 0.180, 0.880);
-  // Outside of right thigh -> knee -> calf -> ankle
-  shape.quadraticCurveTo(0.165, 0.620, 0.142, 0.350);
-  shape.quadraticCurveTo(0.125, 0.130, 0.112, 0.040);
-  // Right foot (toe out then heel)
-  shape.lineTo(0.160, 0.010);
-  shape.lineTo(0.180, 0.000);
+  shape.quadraticCurveTo(0.140, 1.475, 0.230, 1.460);
+  // Outside of right arm — gentle bicep then taper to wrist (hands ~ hip)
+  shape.quadraticCurveTo(0.255, 1.290, 0.245, 1.080);
+  shape.quadraticCurveTo(0.235, 0.920, 0.230, 0.830);
+  // Right hand (rounded curl just above hip — y stays > 0.78)
+  shape.quadraticCurveTo(0.230, 0.780, 0.210, 0.770);
+  shape.quadraticCurveTo(0.190, 0.770, 0.190, 0.820);
+  // Inside of right arm back up to armpit. x stays >= 0.180 the entire
+  // way — never crosses the leg outer line below the hip.
+  shape.quadraticCurveTo(0.184, 0.950, 0.180, 1.080);
+  shape.lineTo(0.180, 1.300);
+  // Side of torso meets inner arm at armpit, tucks for waist, flares hip
+  shape.quadraticCurveTo(0.150, 1.100, 0.158, 0.950);
+  shape.quadraticCurveTo(0.184, 0.920, 0.184, 0.880);
+  // Right thigh -> knee -> calf -> ankle (legs stop at ground, no foot)
+  shape.quadraticCurveTo(0.166, 0.620, 0.142, 0.350);
+  shape.quadraticCurveTo(0.125, 0.130, 0.112, 0.000);
+  // Across ground to inner ankle — no foot extension.
   shape.lineTo(0.040, 0.000);
-  shape.lineTo(0.040, 0.040);
   // Inside of right leg up to crotch
   shape.quadraticCurveTo(0.045, 0.350, 0.030, 0.640);
   shape.quadraticCurveTo(0.020, 0.820, 0.000, 0.860);
   // --- Left side (mirror) ------------------------------------------------
   shape.quadraticCurveTo(-0.020, 0.820, -0.030, 0.640);
-  shape.quadraticCurveTo(-0.045, 0.350, -0.040, 0.040);
-  shape.lineTo(-0.040, 0.000);
-  shape.lineTo(-0.180, 0.000);
-  shape.lineTo(-0.160, 0.010);
-  shape.lineTo(-0.112, 0.040);
+  shape.quadraticCurveTo(-0.045, 0.350, -0.040, 0.000);
+  shape.lineTo(-0.112, 0.000);
   shape.quadraticCurveTo(-0.125, 0.130, -0.142, 0.350);
-  shape.quadraticCurveTo(-0.165, 0.620, -0.180, 0.880);
-  shape.quadraticCurveTo(-0.180, 0.920, -0.142, 0.950);
-  shape.quadraticCurveTo(-0.130, 1.100, -0.140, 1.300);
-  shape.lineTo(-0.140, 1.050);
-  shape.quadraticCurveTo(-0.140, 0.850, -0.145, 0.700);
-  shape.quadraticCurveTo(-0.150, 0.650, -0.185, 0.650);
-  shape.quadraticCurveTo(-0.215, 0.660, -0.210, 0.720);
-  shape.quadraticCurveTo(-0.215, 0.850, -0.235, 1.050);
-  shape.quadraticCurveTo(-0.265, 1.300, -0.235, 1.460);
+  shape.quadraticCurveTo(-0.166, 0.620, -0.184, 0.880);
+  shape.quadraticCurveTo(-0.184, 0.920, -0.158, 0.950);
+  shape.quadraticCurveTo(-0.150, 1.100, -0.180, 1.300);
+  shape.lineTo(-0.180, 1.080);
+  shape.quadraticCurveTo(-0.184, 0.950, -0.190, 0.820);
+  shape.quadraticCurveTo(-0.190, 0.770, -0.210, 0.770);
+  shape.quadraticCurveTo(-0.230, 0.780, -0.230, 0.830);
+  shape.quadraticCurveTo(-0.235, 0.920, -0.245, 1.080);
+  shape.quadraticCurveTo(-0.255, 1.290, -0.230, 1.460);
   shape.quadraticCurveTo(-0.140, 1.475, -0.060, 1.480);
   shape.lineTo(-0.070, 1.520);
   shape.quadraticCurveTo(-0.135, 1.555, -0.140, 1.660);
@@ -2457,13 +2449,18 @@ function _makeTilableNoise(seed, period) {
   };
 }
 
-// Returns { albedoCanvas, normalCanvas } — raw HTMLCanvasElements. The
-// caller (applyBarkStyle) keeps a single THREE.CanvasTexture object for
-// each map and swaps the canvas via `.image` so the bark shader's TSL
-// binding stays valid across style changes. Earlier builds returned new
-// CanvasTextures every call, which orphaned the shader's binding to the
-// first texture and produced "stuck" pattern artefacts when switching
-// styles or rotating.
+// Returns `{ albedoCanvas, normalCanvas }` — raw HTMLCanvasElements only.
+// The caller swaps these into the long-lived singleton CanvasTexture
+// objects (barkAlbedo / barkNormal) via `.image = canvas; needsUpdate=true`
+// so the shader's TSL binding (built once at compile time) stays valid
+// forever. This kills four bugs at once:
+//   1. "Stuck ribbons" — colorNode no longer points at a stale texture
+//      after a style swap.
+//   2. GPU texture leak — only one CanvasTexture per role ever lives.
+//   3. Cache bloat — cache stores cheap HTMLCanvasElements instead of
+//      THREE.CanvasTexture instances.
+//   4. barkRotation snapping — rotation is set on the persistent texture
+//      so it doesn't get wiped by a later swap.
 function generateBarkTexture(style = 'oak', seed = 1) {
   const key = style + ':' + seed;
   const cached = _BARK_TEX_CACHE.get(key);
@@ -2471,7 +2468,6 @@ function generateBarkTexture(style = 'oak', seed = 1) {
 
   const p = BARK_STYLES[style] || BARK_STYLES.oak;
   const N = 512;
-  let aCanvas = null, nCanvas = null;
 
   try {
     // Tilable noise — pre-built grids at multiple scales.
@@ -2522,7 +2518,7 @@ function generateBarkTexture(style = 'oak', seed = 1) {
     }
 
     // Albedo — three-stop palette interpolated by height.
-    aCanvas = document.createElement('canvas');
+    const aCanvas = document.createElement('canvas');
     aCanvas.width = N; aCanvas.height = N;
     const aCtx = aCanvas.getContext('2d');
     const aImg = aCtx.createImageData(N, N);
@@ -2586,38 +2582,55 @@ function generateBarkTexture(style = 'oak', seed = 1) {
     }
     nCtx.putImageData(nImg, 0, 0);
 
-    albedoTex = new THREE.CanvasTexture(aCanvas);
-    albedoTex.wrapS = albedoTex.wrapT = THREE.RepeatWrapping;
-    albedoTex.colorSpace = THREE.SRGBColorSpace;
-    albedoTex.anisotropy = 8;
-    albedoTex.repeat.set(2, 2);
-
-    normalTex = new THREE.CanvasTexture(nCanvas);
-    normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
-    normalTex.anisotropy = 8;
-    normalTex.repeat.set(2, 2);
+    const result = { albedoCanvas: aCanvas, normalCanvas: nCanvas };
+    _BARK_TEX_CACHE.set(key, result);
+    return result;
   } catch (err) {
-    // Bulletproof fallback: any failure → reuse the bundled JPG textures
-    // so the tree never renders unmapped. Logged so we can spot
-    // generator regressions in the console.
-    console.warn('[bark-gen] failed for style', style, '— using fallback', err);
-    albedoTex = _barkImgAlbedo;
-    normalTex = _barkImgNormal;
+    // Bulletproof fallback — render-time consumer (applyBarkStyle) sees
+    // null canvases and keeps the previous textures rather than mapping
+    // unfilled black.
+    console.warn('[bark-gen] failed for style', style, '— keeping previous', err);
+    return null;
   }
-
-  const result = { albedo: albedoTex, normal: normalTex };
-  _BARK_TEX_CACHE.set(key, result);
-  return result;
 }
 
-// Active textures — start as the 'oak' generated set so even before the
-// first species applies, the tree carries a procedural bark.
-let barkAlbedo = _barkImgAlbedo;
-let barkNormal = _barkImgNormal;
+// Singleton bark CanvasTextures — created ONCE, then `.image` is swapped
+// to the canvas the generator produces for the active style. Because the
+// THREE.Texture object identity stays stable across style changes, the
+// TSL colorNode binding (built at line ~2624) keeps working for the
+// lifetime of the page.
+const barkAlbedo = (() => {
+  const t = new THREE.CanvasTexture(document.createElement('canvas'));
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  t.repeat.set(2, 2);
+  return t;
+})();
+const barkNormal = (() => {
+  const t = new THREE.CanvasTexture(document.createElement('canvas'));
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  t.repeat.set(2, 2);
+  return t;
+})();
+
+// Paint the initial 'oak' style into the singletons before the bark
+// material's colorNode is built — that way the TSL binding sees real
+// pixels from frame zero.
 {
-  const initial = generateBarkTexture('oak', 1);
-  barkAlbedo = initial.albedo;
-  barkNormal = initial.normal;
+  const init = generateBarkTexture('oak', 1);
+  if (init) {
+    barkAlbedo.image = init.albedoCanvas;
+    barkNormal.image = init.normalCanvas;
+  } else {
+    // Last-resort fallback — copy the bundled JPGs into the singleton
+    // textures' .image. They'll behave like normal textures.
+    barkAlbedo.image = _barkImgAlbedo.image;
+    barkNormal.image = _barkImgNormal.image;
+  }
+  barkAlbedo.needsUpdate = true;
+  barkNormal.needsUpdate = true;
 }
 
 // --- Wind (TSL vertex displacement) --------------------------------------
@@ -3449,24 +3462,22 @@ function applyLeafMaterial() {
 }
 
 const _barkTint = new THREE.Color();
-// Swap the bark material's textures to the procedural pair generated for
-// the active style. Called from applyBarkMaterial so every species change
-// (which triggers a full rebuild → applyBarkMaterial) picks up new bark.
-let _activeBarkStyle = '__none__';
-let _activeBarkSeed = -1;
+// Swap the canvases inside the singleton bark textures. The Texture
+// objects themselves never change — the TSL colorNode + material's
+// normalMap binding both stay valid. Called from applyBarkMaterial so
+// every species change picks up the new style.
+let _activeBarkStyle = 'oak';   // matches the initial paint above
+let _activeBarkSeed = 1;
 function applyBarkStyle() {
   const style = P.barkStyle || 'oak';
   const seed  = P.barkSeed ?? 1;
   if (style === _activeBarkStyle && seed === _activeBarkSeed) return;
   const tex = generateBarkTexture(style, seed);
-  if (!tex) return;
-  barkAlbedo = tex.albedo;
-  barkNormal = tex.normal;
-  if (barkMat) {
-    barkMat.map = barkAlbedo;
-    barkMat.normalMap = barkNormal;
-    barkMat.needsUpdate = true;
-  }
+  if (!tex) return; // generator failed — keep the previous bark
+  barkAlbedo.image = tex.albedoCanvas;
+  barkNormal.image = tex.normalCanvas;
+  barkAlbedo.needsUpdate = true;
+  barkNormal.needsUpdate = true;
   _activeBarkStyle = style;
   _activeBarkSeed  = seed;
 }
