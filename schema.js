@@ -598,13 +598,18 @@ export const SPECIES = {
     // in a spiral. No secondary branching in real palms. trunkHeight lifted
     // so the frond crown is clearly above human eye-level.
     type: 'broadleaf',
-    trunkHeight: 11, trunkScale: 0.8, tipRadius: 0.1, alloExp: 2.6, rootFlare: 0.4,
+    trunkHeight: 11, trunkScale: 0.8, tipRadius: 0.05, alloExp: 2.6, rootFlare: 0.4,
     trunkLean: 0.12, trunkLeanDir: 35, trunkBow: 0.3,
     globalScale: 0.85,
     leafShape: 'Lanceolate',
-    leafSize: 0.45, leafDroop: 0.7, leafFacing: 0.2, leafStemLen: 0, leafStemAngle: 0.15,
-    leavesPerTip: 16, leafChainSteps: 6, leavesStart: 0.85, season: 0.2,
-    leafClusterSize: 3, leafClusterSpread: 0.5,
+    // Big drooping pinnate leaflets — leafSize big, density high, slight tilt.
+    // leafMaxRadius cranked: palm fronds are an order of magnitude thicker
+    // than typical broadleaf twigs so the default 0.08 radius gate would
+    // reject every frond and the crown would render bare.
+    leafSize: 0.6, leafDroop: 0.85, leafFacing: 0.15, leafStemLen: 0.02, leafStemAngle: 0.2, leafTilt: 0.25,
+    leafMaxRadius: 0.6,
+    leavesPerTip: 32, leafChainSteps: 8, leavesStart: 0.5, season: 0.2,
+    leafClusterSize: 4, leafClusterSpread: 0.6,
     leafPhyllotaxis: 'spiral',
     pruneMode: 'off',
     levels: [
