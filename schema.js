@@ -716,6 +716,163 @@ export const SPECIES = {
       withLevel({ children: 4, lenRatio: 0.4, angle: 0.5, startPlacement: 0.3, endPlacement: 1, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.32, gravitropism: 0.15, densityPoints: [0.55, 0.9, 1, 1, 0.85] }),
     ],
   },
+  Beech: {
+    // Fagus sylvatica/grandifolia — smooth gray trunk, dense ovate-domed
+    // crown. Branches start high (clean bole), dense layered canopy, slight
+    // weep at the very tips.
+    type: 'broadleaf',
+    trunkHeight: 13, trunkScale: 1.1, tipRadius: 0.005, alloExp: 2.4, rootFlare: 0.4,
+    trunkJitter: 0.04,
+    barkHue: -0.05, barkLum: 0.45, barkRoughness: 0.7, barkNormalStrength: 0.6,
+    globalScale: 1.0,
+    shape: 'spherical', baseSize: 0.35,
+    leafShape: 'Oval',
+    leafSize: 0.13, leafSpread: 0.4, leafStemLen: 0.04, leafStemAngle: 0.3, leafTilt: 0.18,
+    leavesPerTip: 32, leafChainSteps: 9, leavesStart: 0.1, season: 0.55,
+    leafClusterSize: 3, leafClusterSpread: 0.55, leafMaxRadius: 0.16,
+    leafPhyllotaxis: 'alternate',
+    pruneMode: 'off',
+    gravityStrength: 0.35, gravityStiffness: 0.7,
+    levels: [
+      // L1: clean strong scaffolds reaching mostly upward; beech's clean-bole
+      // baseSize handles the lower trunk emptiness.
+      withLevel({ children: 11, lenRatio: 0.62, angle: 1.05, angleVar: 0.22, rollVar: 0.85, startPlacement: 0.35, endPlacement: 1, apicalDominance: 0.1, angleDecline: 0.2, distortion: 0.22, distortionType: 'perlin', distortionFreq: 2.2, curveMode: 'sCurve', curveAmount: 0.3, curveBack: -0.2, segSplits: 0.2, splitAngle: 0.35, susceptibility: 1.2, gravitropism: 0.012, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85], lengthPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 9, lenRatio: 0.7, angle: 0.78, angleVar: 0.22, rollVar: 0.85, startPlacement: 0.18, endPlacement: 1, apicalDominance: 0.07, distortion: 0.2, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.3, curveBack: -0.2, segSplits: 0.18, splitAngle: 0.32, gravitropism: 0.025, susceptibility: 1.4, densityPoints: [0.9, 1.0, 1.0, 0.95, 0.85], lengthPoints: [0.9, 1.0, 1.0, 0.95, 0.9] }),
+      withLevel({ children: 7, lenRatio: 0.62, angle: 0.65, angleVar: 0.18, rollVar: 0.9, startPlacement: 0.2, endPlacement: 1, distortion: 0.22, distortionType: 'perlin', distortionFreq: 3.0, stochastic: 0.15, curveMode: 'backCurve', curveAmount: 0.3, segSplits: 0.12, splitAngle: 0.3, gravitropism: 0.05, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
+      // L4 — tip whips droop slightly, classic beech autumn fringe.
+      withLevel({ children: 5, lenRatio: 0.4, angle: 0.55, angleVar: 0.22, rollVar: 0.95, startPlacement: 0.25, endPlacement: 1, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.25, curveMode: 'backCurve', curveAmount: 0.4, gravitropism: 0.14, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
+    ],
+  },
+  PlaneTree: {
+    // Platanus × hispanica (London Plane) — broad spreading crown, palmate
+    // leaves, mottled bark. Iconic city tree. Massive horizontal scaffolds.
+    type: 'broadleaf',
+    trunkHeight: 14, trunkScale: 1.3, tipRadius: 0.006, alloExp: 2.45, rootFlare: 0.6,
+    trunkJitter: 0.06,
+    barkHue: 0.05, barkLum: 0.55, barkRoughness: 0.7, barkNormalStrength: 0.9,
+    barkTexScaleU: 1.8, barkTexScaleV: 2.2,
+    globalScale: 1.0,
+    shape: 'free', baseSize: 0.3,
+    leafShape: 'Maple',
+    leafSize: 0.22, leafSpread: 0.45, leafStemLen: 0.08, leafStemAngle: 0.35, leafTilt: 0.2,
+    leavesPerTip: 26, leafChainSteps: 8, leavesStart: 0.08, season: 0.5,
+    leafClusterSize: 2, leafClusterSpread: 0.55, leafMaxRadius: 0.2,
+    leafPhyllotaxis: 'alternate',
+    pruneMode: 'off',
+    gravityStrength: 0.5, gravityStiffness: 0.55,
+    levels: [
+      // L1: heavy horizontal scaffolds, low-fork — typical plane silhouette.
+      withLevel({ children: 10, lenRatio: 0.72, angle: 1.3, angleVar: 0.3, rollVar: 0.95, startPlacement: 0.28, endPlacement: 1, apicalDominance: 0.04, angleDecline: 0.3, distortion: 0.3, distortionType: 'perlin', distortionFreq: 2.0, curveMode: 'sCurve', curveAmount: 0.4, curveBack: -0.3, segSplits: 0.35, splitAngle: 0.4, susceptibility: 1.4, gravitropism: 0.015, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85], lengthPoints: [0.95, 1.0, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 9, lenRatio: 0.7, angle: 0.9, angleVar: 0.28, rollVar: 0.9, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.06, distortion: 0.26, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.4, curveBack: -0.3, segSplits: 0.25, splitAngle: 0.35, gravitropism: 0.03, susceptibility: 1.5, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 7, lenRatio: 0.6, angle: 0.7, angleVar: 0.22, rollVar: 0.9, startPlacement: 0.22, endPlacement: 1, distortion: 0.24, distortionType: 'perlin', distortionFreq: 3.0, stochastic: 0.18, curveMode: 'backCurve', curveAmount: 0.32, segSplits: 0.18, splitAngle: 0.32, gravitropism: 0.04, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 5, lenRatio: 0.4, angle: 0.55, angleVar: 0.25, rollVar: 0.95, startPlacement: 0.25, endPlacement: 1, distortion: 0.28, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.3, curveMode: 'backCurve', curveAmount: 0.35, gravitropism: 0.16, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
+    ],
+  },
+  Ginkgo: {
+    // Ginkgo biloba — living fossil. Pyramidal when young, more spreading
+    // with age. Distinctive fan-shaped leaves, brilliant golden autumn.
+    type: 'broadleaf',
+    trunkHeight: 11, trunkScale: 1.05, tipRadius: 0.006, alloExp: 2.5, rootFlare: 0.4,
+    trunkJitter: 0.05,
+    globalScale: 1.0,
+    shape: 'tend-flame', baseSize: 0.25,
+    leafShape: 'Fan',
+    // Brilliant golden autumn — season pushed high, hue boosted yellow.
+    leafSize: 0.11, leafSpread: 0.42, leafStemLen: 0.06, leafStemAngle: 0.4, leafTilt: 0.25,
+    leavesPerTip: 22, leafChainSteps: 6, leavesStart: 0.1, season: 0.78,
+    leafHueShift: 0.06,
+    leafClusterSize: 4, leafClusterSpread: 0.4, leafMaxRadius: 0.1,
+    leafPhyllotaxis: 'spiral',
+    pruneMode: 'off',
+    gravityStrength: 0.18, gravityStiffness: 0.9,
+    levels: [
+      // L1: more upright than oak — Ginkgo silhouette tends pyramidal-flame.
+      withLevel({ children: 10, lenRatio: 0.6, angle: 0.95, angleVar: 0.18, rollVar: 0.85, startPlacement: 0.25, endPlacement: 1, apicalDominance: 0.18, angleDecline: 0.15, distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.4, curveMode: 'sCurve', curveAmount: 0.25, curveBack: -0.15, segSplits: 0.15, splitAngle: 0.35, susceptibility: 1.3, gravitropism: 0.005, densityPoints: [0.7, 0.95, 1.0, 1.0, 0.85] }),
+      withLevel({ children: 8, lenRatio: 0.62, angle: 0.7, angleVar: 0.18, rollVar: 0.85, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.12, distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.8, curveMode: 'sCurve', curveAmount: 0.22, segSplits: 0.15, splitAngle: 0.32, gravitropism: 0.015, densityPoints: [0.75, 0.95, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 6, lenRatio: 0.55, angle: 0.6, angleVar: 0.2, rollVar: 0.9, startPlacement: 0.2, endPlacement: 1, distortion: 0.18, distortionType: 'perlin', distortionFreq: 3.2, stochastic: 0.18, curveMode: 'backCurve', curveAmount: 0.22, gravitropism: 0.025, densityPoints: [0.8, 0.95, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 5, lenRatio: 0.42, angle: 0.5, angleVar: 0.22, rollVar: 0.95, startPlacement: 0.25, endPlacement: 1, distortion: 0.22, distortionType: 'perlin', distortionFreq: 3.4, stochastic: 0.25, gravitropism: 0.1, densityPoints: [0.8, 0.95, 1.0, 0.95, 0.85] }),
+    ],
+  },
+  LombardyPoplar: {
+    // Populus nigra 'Italica' — narrow columnar exclamation point.
+    // Branches sweep dramatically upward against the trunk. Iconic Tuscan
+    // landscape and windbreak rows.
+    type: 'broadleaf',
+    trunkHeight: 16, trunkScale: 0.85, tipRadius: 0.005, alloExp: 2.8, rootFlare: 0.25,
+    trunkJitter: 0.04,
+    globalScale: 1.0,
+    shape: 'cylindrical', baseSize: 0.05,
+    leafShape: 'Heart',
+    leafSize: 0.07, leafSpread: 0.3, leafStemLen: 0.05, leafStemAngle: 0.45, leafTilt: 0.3,
+    leavesPerTip: 18, leafChainSteps: 6, leavesStart: 0.08, season: 0.6,
+    leafClusterSize: 3, leafClusterSpread: 0.35, leafMaxRadius: 0.06,
+    leafPhyllotaxis: 'alternate',
+    pruneMode: 'off',
+    gravityStrength: 0.05, gravityStiffness: 1.4,
+    levels: [
+      // L1: branches sweep UP hard along the trunk — phototropism + tight
+      // angle gives the narrow column.
+      withLevel({ children: 30, lenRatio: 0.18, angle: 0.45, angleVar: 0.1, rollVar: 0.5, startPlacement: 0.05, endPlacement: 1, phototropism: 0.06, gravitropism: 0, susceptibility: 1.0, distortion: 0.08, distortionType: 'perlin', distortionFreq: 3.2, segSplits: 0.05, splitAngle: 0.2, densityPoints: [0.9, 1.0, 1.0, 1.0, 0.9] }),
+      withLevel({ children: 5, lenRatio: 0.5, angle: 0.5, angleVar: 0.18, rollVar: 0.9, startPlacement: 0.2, endPlacement: 1, phototropism: 0.04, distortion: 0.12, distortionType: 'perlin', distortionFreq: 3.0, segSplits: 0.1, splitAngle: 0.25, densityPoints: [0.7, 0.95, 1.0, 0.95, 0.8] }),
+      withLevel({ children: 4, lenRatio: 0.45, angle: 0.45, startPlacement: 0.2, endPlacement: 1, distortion: 0.14, distortionType: 'perlin', distortionFreq: 3.4, stochastic: 0.2, gravitropism: 0.02, densityPoints: [0.7, 0.95, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 3, lenRatio: 0.32, angle: 0.4, startPlacement: 0.25, endPlacement: 1, distortion: 0.18, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.25, gravitropism: 0.06, densityPoints: [0.75, 0.95, 1.0, 1.0, 0.9] }),
+    ],
+  },
+  JapaneseMaple: {
+    // Acer palmatum — small ornamental, ~5m. Layered horizontal branches,
+    // delicate dissected palmate leaves, brilliant red autumn.
+    type: 'broadleaf',
+    trunkHeight: 4, trunkScale: 0.95, tipRadius: 0.004, alloExp: 2.2, rootFlare: 0.35,
+    trunkJitter: 0.08,
+    globalScale: 0.6,
+    shape: 'tend-flame', baseSize: 0.15,
+    leafShape: 'Maple',
+    // Delicate red leaves — small with small clusters.
+    leafSize: 0.09, leafSpread: 0.35, leafStemLen: 0.05, leafStemAngle: 0.4, leafTilt: 0.2,
+    leavesPerTip: 18, leafChainSteps: 7, leavesStart: 0.1, season: 0.85,
+    leafHueShift: -0.12,
+    leafClusterSize: 2, leafClusterSpread: 0.5, leafMaxRadius: 0.08,
+    leafPhyllotaxis: 'opposite',
+    pruneMode: 'off',
+    gravityStrength: 0.3, gravityStiffness: 0.6,
+    levels: [
+      // L1: low-fork, layered horizontal scaffolds — Japanese maple's
+      // distinctive cake-tier silhouette comes from low gravitropism +
+      // strong horizontal angle.
+      withLevel({ children: 7, lenRatio: 0.85, angle: 1.35, angleVar: 0.3, rollVar: 0.95, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.04, angleDecline: 0.35, distortion: 0.32, distortionType: 'perlin', distortionFreq: 2.2, curveMode: 'sCurve', curveAmount: 0.5, curveBack: -0.4, segSplits: 0.45, splitAngle: 0.45, torsion: 0.2, susceptibility: 1.4, gravitropism: 0.04, densityPoints: [0.7, 0.95, 1.0, 0.95, 0.8], lengthPoints: [0.85, 1.0, 1.05, 1.0, 0.85] }),
+      withLevel({ children: 6, lenRatio: 0.78, angle: 0.85, angleVar: 0.3, rollVar: 0.9, startPlacement: 0.18, endPlacement: 1, apicalDominance: 0.05, distortion: 0.28, distortionType: 'perlin', distortionFreq: 2.8, curveMode: 'sCurve', curveAmount: 0.4, curveBack: -0.3, segSplits: 0.3, splitAngle: 0.4, gravitropism: 0.06, susceptibility: 1.6, densityPoints: [0.75, 0.95, 1.0, 0.95, 0.8] }),
+      withLevel({ children: 5, lenRatio: 0.65, angle: 0.65, angleVar: 0.22, rollVar: 0.9, startPlacement: 0.2, endPlacement: 1, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3.2, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.08, densityPoints: [0.8, 0.95, 1.0, 0.95, 0.85] }),
+      withLevel({ children: 4, lenRatio: 0.4, angle: 0.5, startPlacement: 0.25, endPlacement: 1, distortion: 0.3, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.32, gravitropism: 0.18, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85] }),
+    ],
+  },
+  Eucalyptus: {
+    // Eucalyptus globulus / camaldulensis — tall, sparse upper canopy,
+    // long pendulous lance leaves, smooth peeling bark. Open silhouette
+    // with most foliage at the ends of long branches.
+    type: 'broadleaf',
+    trunkHeight: 17, trunkScale: 1.1, tipRadius: 0.006, alloExp: 2.55, rootFlare: 0.4,
+    trunkJitter: 0.05,
+    barkHue: 0.02, barkLum: 0.5, barkRoughness: 0.55, barkNormalStrength: 0.5,
+    barkTexScaleU: 1.5, barkTexScaleV: 2.5,
+    globalScale: 1.0,
+    shape: 'free', baseSize: 0.3,
+    leafShape: 'Lanceolate',
+    // Long narrow leaves clustered at branch tips, slightly drooping.
+    leafSize: 0.18, leafDroop: 0.45, leafFacing: 0.35, leafSpread: 0.4,
+    leafStemLen: 0.04, leafStemAngle: 0.4, leafTilt: 0.3,
+    leavesPerTip: 26, leafChainSteps: 9, leavesStart: 0.45, season: 0.45,
+    leafClusterSize: 3, leafClusterSpread: 0.5, leafMaxRadius: 0.14,
+    leafPhyllotaxis: 'opposite',
+    pruneMode: 'off',
+    gravityStrength: 0.45, gravityStiffness: 0.55,
+    levels: [
+      // L1: long, sweeping, open scaffolds — sparse Eucalyptus silhouette.
+      withLevel({ children: 8, lenRatio: 0.85, angle: 1.0, angleVar: 0.3, rollVar: 0.95, startPlacement: 0.32, endPlacement: 1, apicalDominance: 0.06, angleDecline: 0.2, distortion: 0.22, distortionType: 'perlin', distortionFreq: 2.2, curveMode: 'sCurve', curveAmount: 0.5, curveBack: -0.35, segSplits: 0.18, splitAngle: 0.4, susceptibility: 1.5, gravitropism: 0.025, densityPoints: [0.7, 0.95, 1.0, 0.95, 0.75], lengthPoints: [0.85, 1.0, 1.05, 1.0, 0.85] }),
+      withLevel({ children: 5, lenRatio: 0.78, angle: 0.85, angleVar: 0.28, rollVar: 0.9, startPlacement: 0.25, endPlacement: 1, apicalDominance: 0.08, distortion: 0.2, distortionType: 'perlin', distortionFreq: 2.8, curveMode: 'sCurve', curveAmount: 0.4, curveBack: -0.3, segSplits: 0.15, splitAngle: 0.35, gravitropism: 0.04, susceptibility: 1.6, densityPoints: [0.7, 0.95, 1.0, 0.95, 0.8] }),
+      withLevel({ children: 4, lenRatio: 0.7, angle: 0.65, startPlacement: 0.25, endPlacement: 1, distortion: 0.2, distortionType: 'perlin', distortionFreq: 3.2, stochastic: 0.18, curveMode: 'backCurve', curveAmount: 0.32, gravitropism: 0.06, densityPoints: [0.75, 0.95, 1.0, 0.95, 0.8] }),
+      withLevel({ children: 3, lenRatio: 0.5, angle: 0.55, startPlacement: 0.3, endPlacement: 1, distortion: 0.24, distortionType: 'perlin', distortionFreq: 3.6, stochastic: 0.3, curveMode: 'backCurve', curveAmount: 0.4, gravitropism: 0.18, densityPoints: [0.8, 0.95, 1.0, 0.95, 0.85] }),
+    ],
+  },
   Pine: {
     type: 'conifer',
     trunkHeight: 14, trunkScale: 1.25, tipRadius: 0.022, alloExp: 2.6, rootFlare: 0.5,

@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r5';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r5';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r5';
-import { buildRootsGeometry } from './roots.js?v=r5';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r6';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r6';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r6';
+import { buildRootsGeometry } from './roots.js?v=r6';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -3269,6 +3269,13 @@ P.settings = {
   fogFar: 258,
   envIntensity: 1.0,
   showAxes: false,
+  // App-level (Session 14): quality preset that bundles pixelRatio +
+  // shadowQuality + bloom into one knob; FPS / triangle stats overlay
+  // visibility; auto-orbit for hero shots / screen recordings.
+  qualityPreset: 'Balanced',
+  statsVisible: true,
+  autoOrbit: false,
+  autoOrbitSpeed: 8,
 };
 P.treeType = 'broadleaf';
 // Bake mode: self-organizing tree growth simulation (Palubicki-lite).
@@ -10365,6 +10372,132 @@ addSectionLabel('Scene', null, 'sun');
   sidebarBody.appendChild(details);
 }
 
+// 7b. App-level quality / overlay / capture controls. Scene-tab cards.
+{
+  // Quality preset — single dropdown that drives pixelRatio + shadow
+  // quality + bloom in lockstep so users don't have to tune three sliders.
+  // The individual sliders are still in the Settings card below for power
+  // users who want overrides; this just gives a fast way to swing between
+  // performance and visual fidelity.
+  const details = document.createElement('details');
+  details.open = false;
+  const summary = document.createElement('summary');
+  setSummary(summary, 'sliders', 'Quality');
+  details.appendChild(summary);
+  const wrap = document.createElement('div');
+  wrap.className = 'pane-pad';
+  const label = document.createElement('div');
+  label.className = 'label-sm';
+  label.textContent = 'Preset';
+  const select = document.createElement('select');
+  select.className = 'select select-full';
+  for (const [value, text] of [
+    ['Performance', 'Performance — fastest'],
+    ['Balanced',    'Balanced — default'],
+    ['Quality',     'Quality — best looking'],
+  ]) {
+    const opt = document.createElement('option');
+    opt.value = value; opt.textContent = text;
+    select.appendChild(opt);
+  }
+  select.value = P.settings.qualityPreset;
+  function applyQualityPreset(name) {
+    const presets = {
+      Performance: { pixelRatio: 1,   shadowsEnabled: false, shadowQuality: 'Low',    bloomEnabled: false },
+      Balanced:    { pixelRatio: Math.min(window.devicePixelRatio, 1.5), shadowsEnabled: true, shadowQuality: 'Medium', bloomEnabled: true  },
+      Quality:     { pixelRatio: Math.min(window.devicePixelRatio, 2),   shadowsEnabled: true, shadowQuality: 'High',   bloomEnabled: true  },
+    };
+    const p = presets[name]; if (!p) return;
+    P.settings.pixelRatio     = p.pixelRatio;
+    P.settings.shadowsEnabled = p.shadowsEnabled;
+    P.settings.shadowQuality  = p.shadowQuality;
+    P.settings.bloomEnabled   = p.bloomEnabled;
+    applyPixelRatio(p.pixelRatio);
+    applyShadowsEnabled(p.shadowsEnabled);
+    applyShadowQuality(p.shadowQuality);
+    applyBloom(p.bloomEnabled, P.settings.bloomIntensity);
+  }
+  select.addEventListener('change', () => {
+    P.settings.qualityPreset = select.value;
+    applyQualityPreset(select.value);
+  });
+  wrap.append(label, select);
+  details.appendChild(wrap);
+  sidebarBody.appendChild(details);
+}
+{
+  // FPS / triangle counter overlay. The overlay element exists at
+  // index.html:38 (#stats) and is populated by updateStats() every frame;
+  // this just toggles its visibility.
+  const details = document.createElement('details');
+  details.open = false;
+  const summary = document.createElement('summary');
+  setSummary(summary, 'activity', 'Stats overlay');
+  details.appendChild(summary);
+  const wrap = document.createElement('div');
+  wrap.className = 'pane-pad';
+  const row = document.createElement('label');
+  row.className = 'row';
+  row.style.cursor = 'pointer';
+  row.style.gridTemplateColumns = '1fr auto';
+  const lbl = document.createElement('span');
+  lbl.className = 'name';
+  lbl.textContent = 'Show fps / tri counter';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = !!P.settings.statsVisible;
+  function applyStatsVis(on) {
+    const el = document.getElementById('stats');
+    if (el) el.style.display = on ? '' : 'none';
+  }
+  applyStatsVis(P.settings.statsVisible);
+  cb.addEventListener('change', () => {
+    P.settings.statsVisible = cb.checked;
+    applyStatsVis(cb.checked);
+  });
+  row.append(lbl, cb);
+  wrap.appendChild(row);
+  details.appendChild(wrap);
+  sidebarBody.appendChild(details);
+}
+{
+  // Auto-orbit — slow continuous Y-rotation around the orbit target.
+  // Useful for hero shots and screen-recorded GIFs without having to
+  // hand-drag the mouse. Cancels on user interaction (pointerdown on the
+  // canvas via OrbitControls' 'start' event).
+  const details = document.createElement('details');
+  details.open = false;
+  const summary = document.createElement('summary');
+  setSummary(summary, 'refresh-cw', 'Auto-orbit');
+  details.appendChild(summary);
+  const wrap = document.createElement('div');
+  wrap.className = 'pane-pad';
+  const row = document.createElement('label');
+  row.className = 'row';
+  row.style.cursor = 'pointer';
+  row.style.gridTemplateColumns = '1fr auto';
+  const lbl = document.createElement('span');
+  lbl.className = 'name';
+  lbl.textContent = 'Enable';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = !!P.settings.autoOrbit;
+  cb.addEventListener('change', () => { P.settings.autoOrbit = cb.checked; });
+  row.append(lbl, cb);
+  wrap.appendChild(row);
+  // Speed in deg/s.
+  const speedRow = createSliderRow(
+    { key: 'autoOrbitSpeed', label: 'Speed (°/s)', min: 1, max: 60, step: 0.5, default: 8, live: true },
+    () => P.settings.autoOrbitSpeed,
+    (v) => { P.settings.autoOrbitSpeed = v; },
+    () => {},
+    { noRegen: true },
+  );
+  wrap.appendChild(speedRow);
+  details.appendChild(wrap);
+  sidebarBody.appendChild(details);
+}
+
 // 8. Dynamics — wind + PBD physics knobs
 addSectionLabel('Dynamics', null, 'wind');
 {
@@ -13416,6 +13549,23 @@ async function animate() {
     camera.position.lerpVectors(reframeAnim.fromCam, reframeAnim.toCam, e);
     controls.target.lerpVectors(reframeAnim.fromTarget, reframeAnim.toTarget, e);
     if (k >= 1) reframeAnim = null;
+  }
+
+  // Auto-orbit — rotate the camera around its orbit target on the world Y
+  // axis at the user's chosen rate. Skipped during a reframe animation so
+  // the lerp doesn't fight the rotation, and during pointer interaction so
+  // the user can grab back control mid-orbit (OrbitControls handles that
+  // by pausing controls.update() input — we just stop adding rotation).
+  if (P.settings.autoOrbit && !reframeAnim && !grabbing) {
+    const dps = P.settings.autoOrbitSpeed ?? 8;
+    const ang = dps * (Math.PI / 180) * dt;
+    const tgt = controls.target;
+    const px = camera.position.x - tgt.x;
+    const pz = camera.position.z - tgt.z;
+    const c = Math.cos(ang), s = Math.sin(ang);
+    camera.position.x = tgt.x + (px * c - pz * s);
+    camera.position.z = tgt.z + (px * s + pz * c);
+    markRenderDirty(2);
   }
 
   controls.update();
