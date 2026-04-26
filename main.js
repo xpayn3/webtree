@@ -8591,6 +8591,11 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   const isSwatch = !!p.swatch;
   function applyStep(s, emit = true) {
     step = Math.max(0, Math.min(totalSteps, s));
+    // Visually snap the fill bar to integer positions for integer-step
+    // sliders (Trunk count, level Branch count, kinkSteps, etc.). Without
+    // this the bar slides smoothly between 1 and 2 even though the value
+    // can only be 1 or 2 — feels mushy.
+    if (Number.isInteger(p.step)) step = Math.round(step);
     const pct = (step / totalSteps) * 100;
     fillEl.style.width = `${pct}%`;
     // Swatch sliders draw a pseudo-element thumb at --marker-x — see CSS
