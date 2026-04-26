@@ -1592,9 +1592,15 @@ function rehydrateTreeFromSoA(tree, chainsIdx) {
   return { nodes, chains };
 }
 
-// --- Studio 3-point lighting ---------------------------------------------
-const key = new THREE.DirectionalLight(0xfff3e4, 2.6);
-key.position.set(10, 18, 8);
+// --- Majestic backlit hero lighting -------------------------------------
+// Backlit landscape-photography setup: warm golden 3/4 back-light wraps
+// every branch in rim halo, soft cool front fill keeps the shadow side
+// readable, side warm rim adds depth. The classic look photographers go
+// for when shooting a hero tree at golden hour.
+//
+// `key` is the BACKLIGHT (camera looks toward sun, sun behind tree).
+const key = new THREE.DirectionalLight(0xffd8a0, 3.6); // warm ~3500 K
+key.position.set(-7, 13, -11); // behind-left, elevated ~30°
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
 key.shadow.camera.left = -22;
@@ -1606,16 +1612,29 @@ key.shadow.camera.far = 60;
 key.shadow.bias = -0.0015;
 // NB: shadow.radius is ignored by PCFSoftShadowMap — don't set it here.
 scene.add(key);
-const fill = new THREE.DirectionalLight(0xc8dfff, 0.9);
-fill.position.set(-9, 7, 5);
+// Front fill — cool sky-bounce, low intensity, lifts the shadow side
+// without flattening contrast.
+const fill = new THREE.DirectionalLight(0x9bc0ff, 0.55);
+fill.position.set(8, 5, 11);
 scene.add(fill);
-const rim = new THREE.DirectionalLight(0xffffff, 1.4);
-rim.position.set(0, 9, -14);
+// Side rim — warm secondary edge so the wrap continues around the tree
+// instead of clipping to silhouette on the front.
+const rim = new THREE.DirectionalLight(0xffe6b8, 1.2);
+rim.position.set(11, 7, -3);
 scene.add(rim);
-const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+// Tiny pure-ambient lift so the deepest shadow pockets aren't crushed.
+const ambient = new THREE.AmbientLight(0xffffff, 0.12);
 scene.add(ambient);
 
 const LIGHTING_PRESETS = {
+  Majestic: {
+    // Hero backlight (warm), cool front fill, warm side rim.
+    // Default — the tree-photo cliché everyone wants.
+    key:     { color: 0xffd8a0, intensity: 3.6, pos: [-7, 13, -11] },
+    fill:    { color: 0x9bc0ff, intensity: 0.55, pos: [8, 5, 11] },
+    rim:     { color: 0xffe6b8, intensity: 1.2, pos: [11, 7, -3] },
+    ambient: { color: 0xffffff, intensity: 0.12 },
+  },
   Studio: {
     key:     { color: 0xfff3e4, intensity: 2.6, pos: [10, 18, 8] },
     fill:    { color: 0xc8dfff, intensity: 0.9, pos: [-9, 7, 5] },
@@ -1659,7 +1678,7 @@ const LIGHTING_PRESETS = {
     ambient: { color: 0x604060, intensity: 0.30 },
   },
 };
-let currentLighting = 'Studio';
+let currentLighting = 'Majestic';
 function applyLighting(name) {
   const L = LIGHTING_PRESETS[name];
   if (!L) return;

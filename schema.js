@@ -562,6 +562,7 @@ export const SPECIES = {
     leavesPerTip: 38, leafChainSteps: 8, leavesStart: 0.2, season: 0.5,
     leafClusterSize: 6, leafClusterSpread: 0.85, leafMaxRadius: 0.22,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#8aa760', leafVeinColor: '#5a7240',
     pruneMode: 'off',
     levels: [
       // Acacia: horizontal umbrella (African Flat-Top / Vachellia). The
@@ -591,6 +592,7 @@ export const SPECIES = {
     leavesPerTip: 14, leafChainSteps: 6, leavesStart: 0.1, season: 0.28,
     leafClusterSize: 4, leafClusterSpread: 0.6,
     leafPhyllotaxis: 'opposite',
+    leafFillColor: '#8a9b6f', leafVeinColor: '#5a6c48',
     pruneMode: 'off',
     levels: [
       // Olive: gnarly twisted branches (Leeuwenberg-like — sympodial, no
@@ -621,6 +623,7 @@ export const SPECIES = {
     leavesPerTip: 12, leafChainSteps: 5, leavesStart: 0.5, season: 0.5,
     leafClusterSize: 5, leafClusterSpread: 0.65,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#6b8a40', leafVeinColor: '#4a6028',
     pruneMode: 'off',
     levels: [
       // Baobab: massive horizontal scaffold at the top of the trunk.
@@ -667,6 +670,7 @@ export const SPECIES = {
     leavesPerTip: 28, leafChainSteps: 8, leavesStart: 0.5, season: 0.2,
     leafClusterSize: 1, leafClusterSpread: 0.0,
     leafPhyllotaxis: 'opposite',
+    leafFillColor: '#3e7232', leafVeinColor: '#1a3e1a',
     pruneMode: 'off',
     levels: [
       // Palm: tufted radial whorl at the very top — no true branching in
@@ -702,6 +706,7 @@ export const SPECIES = {
     leavesPerTip: 18, leafChainSteps: 6, leavesStart: 0.3, season: 0.55,
     leafClusterSize: 3, leafClusterSpread: 0.45, leafMaxRadius: 0.06,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#7ea64a', leafVeinColor: '#4a6428',
     // Narrow columnar Aspen shape comes from cylindrical 'shape' + density
     // ramps; hard envelope was double-clipping.
     pruneMode: 'off',
@@ -728,6 +733,7 @@ export const SPECIES = {
     leavesPerTip: 22, leafChainSteps: 6, leavesStart: 0.1, season: 0.88,
     leafClusterSize: 4, leafClusterSpread: 0.65, leafMaxRadius: 0.1,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#3e6a2c', leafVeinColor: '#1f3a18',
     pruneMode: 'off',
     levels: [
       // L1: short laterals kept close to the central trunk + high apical
@@ -754,6 +760,7 @@ export const SPECIES = {
     leavesPerTip: 12, leafChainSteps: 6, leavesStart: 0.15, season: 0.82,
     leafClusterSize: 3, leafClusterSpread: 0.5, leafMaxRadius: 0.08,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#6e8e3c', leafVeinColor: '#3a5a22',
     pruneMode: 'off',
     levels: [
       // Sassafras: irregular, twisted, lots of forking at every level.
@@ -778,6 +785,7 @@ export const SPECIES = {
     leavesPerTip: 14, leafChainSteps: 6, leavesStart: 0.1, season: 0.5,
     leafClusterSize: 4, leafClusterSpread: 0.65, leafMaxRadius: 0.12,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#5e8038', leafVeinColor: '#3a5024',
     pruneMode: 'off',
     levels: [
       // Lime (Tilia): big dense round canopy, large heart-shaped leaves,
@@ -804,6 +812,7 @@ export const SPECIES = {
     leavesPerTip: 32, leafChainSteps: 9, leavesStart: 0.1, season: 0.55,
     leafClusterSize: 3, leafClusterSpread: 0.55, leafMaxRadius: 0.16,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#4c7434', leafVeinColor: '#2a4a1f',
     pruneMode: 'off',
     gravityStrength: 0.35, gravityStiffness: 0.7,
     levels: [
@@ -831,6 +840,7 @@ export const SPECIES = {
     leavesPerTip: 26, leafChainSteps: 8, leavesStart: 0.08, season: 0.5,
     leafClusterSize: 2, leafClusterSpread: 0.55, leafMaxRadius: 0.2,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#5a7c38', leafVeinColor: '#3a5022',
     pruneMode: 'off',
     gravityStrength: 0.5, gravityStiffness: 0.55,
     levels: [
@@ -856,6 +866,7 @@ export const SPECIES = {
     leafHueShift: 0.06,
     leafClusterSize: 4, leafClusterSpread: 0.4, leafMaxRadius: 0.1,
     leafPhyllotaxis: 'spiral',
+    leafFillColor: '#7ea843', leafVeinColor: '#4a6428',
     pruneMode: 'off',
     gravityStrength: 0.18, gravityStiffness: 0.9,
     levels: [
@@ -880,6 +891,7 @@ export const SPECIES = {
     leavesPerTip: 18, leafChainSteps: 6, leavesStart: 0.08, season: 0.6,
     leafClusterSize: 3, leafClusterSpread: 0.35, leafMaxRadius: 0.06,
     leafPhyllotaxis: 'alternate',
+    leafFillColor: '#6e9438', leafVeinColor: '#3a5a20',
     pruneMode: 'off',
     gravityStrength: 0.05, gravityStiffness: 1.4,
     levels: [
@@ -906,6 +918,7 @@ export const SPECIES = {
     leafHueShift: -0.12,
     leafClusterSize: 2, leafClusterSpread: 0.5, leafMaxRadius: 0.08,
     leafPhyllotaxis: 'opposite',
+    leafFillColor: '#9b3424', leafVeinColor: '#5a1a14',
     pruneMode: 'off',
     gravityStrength: 0.3, gravityStiffness: 0.6,
     levels: [
@@ -936,6 +949,7 @@ export const SPECIES = {
     leavesPerTip: 26, leafChainSteps: 9, leavesStart: 0.45, season: 0.45,
     leafClusterSize: 3, leafClusterSpread: 0.5, leafMaxRadius: 0.14,
     leafPhyllotaxis: 'opposite',
+    leafFillColor: '#a4b58a', leafVeinColor: '#7a8a68',
     pruneMode: 'off',
     gravityStrength: 0.45, gravityStiffness: 0.55,
     levels: [
@@ -1155,6 +1169,7 @@ export const SPECIES = {
     leafClusterSize: 2, leafClusterSpread: 0.3,
     season: 0,
     leafHueShift: -0.04,
+    leafFillColor: '#2e4e2c', leafVeinColor: '#1a3018',
     gravityStrength: 0.05, gravityStiffness: 1.0,
   },
   Lavender: {
@@ -1169,6 +1184,7 @@ export const SPECIES = {
     leafClusterSize: 1, leafClusterSpread: 0.0,
     season: 0.2,
     leafHueShift: 0.06,
+    leafFillColor: '#9aa088', leafVeinColor: '#6a7058',
     gravityStrength: 0.02, gravityStiffness: 1.4,
   },
   Hydrangea: {
@@ -1183,6 +1199,7 @@ export const SPECIES = {
     leafClusterSize: 2, leafClusterSpread: 0.4,
     season: 0.45,
     leafHueShift: 0.0,
+    leafFillColor: '#5a7c34', leafVeinColor: '#3a5024',
     gravityStrength: 0.55, gravityStiffness: 0.6,
   },
   Rosemary: {
@@ -1197,6 +1214,7 @@ export const SPECIES = {
     leafClusterSize: 3, leafClusterSpread: 0.2,
     season: 0.3,
     leafHueShift: 0.04,
+    leafFillColor: '#7a8a68', leafVeinColor: '#586850',
     gravityStrength: 0.08, gravityStiffness: 1.2,
   },
   Holly: {
