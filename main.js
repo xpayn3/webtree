@@ -3914,12 +3914,20 @@ const needleMatB = makeLeafMaterial(NEEDLE_MAT_DEFAULTS);
 // Seasonal palette: hue lightness → tint color + density multiplier
 // t=0 spring green, 0.5 summer, 0.75 autumn, 1 winter bare
 function seasonInfo(t) {
+  // More density stops in the late-season tail so leaves drop continuously
+  // as `season` is scrubbed toward 1 instead of disappearing in chunks at
+  // each curve segment. Pair with the probabilistic rounding in
+  // `_foliagePhase` so individual leaves fall one-by-one rather than the
+  // whole canopy thinning a step at a time.
   const stops = [
-    { t: 0,    h: 0.28, s: 0.55, l: 0.55, density: 1.0 },
-    { t: 0.5,  h: 0.28, s: 0.45, l: 0.40, density: 1.0 },
-    { t: 0.75, h: 0.08, s: 0.75, l: 0.48, density: 0.82 },
-    { t: 0.9,  h: 0.05, s: 0.65, l: 0.36, density: 0.45 },
-    { t: 1.0,  h: 0.05, s: 0.40, l: 0.30, density: 0.0  },
+    { t: 0,     h: 0.28, s: 0.55, l: 0.55, density: 1.0 },
+    { t: 0.5,   h: 0.28, s: 0.45, l: 0.40, density: 1.0 },
+    { t: 0.7,   h: 0.10, s: 0.72, l: 0.50, density: 0.92 },
+    { t: 0.78,  h: 0.08, s: 0.75, l: 0.48, density: 0.78 },
+    { t: 0.86,  h: 0.06, s: 0.70, l: 0.42, density: 0.56 },
+    { t: 0.92,  h: 0.05, s: 0.65, l: 0.36, density: 0.34 },
+    { t: 0.97,  h: 0.05, s: 0.55, l: 0.32, density: 0.14 },
+    { t: 1.0,   h: 0.05, s: 0.40, l: 0.30, density: 0.0  },
   ];
   let i = 0;
   while (i < stops.length - 1 && t > stops[i + 1].t) i++;
@@ -7345,7 +7353,12 @@ function _foliagePhase(treeNodes, tips, maxTreeY) {
       const rawTip   = P.leavesPerTip * branchFill;
       const tipCount = Math.floor(rawTip) + (random() < (rawTip - Math.floor(rawTip)) ? 1 : 0);
       const baseCount = isConiferLeaves && step === 0 ? tipCount : perStep;
-      const count = Math.max(0, Math.round(baseCount * seasonalDensity));
+      // Probabilistic rounding (same pattern as perStep above) so each leaf
+      // has an independent fractional chance of being kept as season climbs.
+      // Math.round would force the whole twig to drop a leaf at once when
+      // density crossed each 0.5 boundary — visibly chunky.
+      const rawCount = baseCount * seasonalDensity;
+      const count = Math.max(0, Math.floor(rawCount) + (random() < (rawCount - Math.floor(rawCount)) ? 1 : 0));
       const stemLen = P.leafStemLen ?? 0;
       const tilt = P.leafTilt ?? 0;
       const colorVar = P.leafColorVar ?? 0;
@@ -7819,7 +7832,12 @@ async function generateTree(opts = {}) {
     }
     if (P.treeType === 'conifer') applyConiferConfigToP();
     else if (P.treeType === 'bush') applyBushConfigToP();
-    applyBarkMaterial();
+    // applyBarkMaterial / applyLeafMaterial are deferred to after the
+    // orphan drain (see line ~8169) so the old (orphaned) tree keeps its
+    // old materials throughout the worker round-trip. Mutating the
+    // singleton barkMat / leafMat here would instantly retint the
+    // orphan — the user sees pine bark on an oak silhouette during the
+    // entire async build.
   }
   // Skip foliage entirely during scrubs of tree-shape sliders. _foliagePhase
   // scatters 200k+ leaves and is the single biggest cost of a full rebuild on
@@ -7827,7 +7845,6 @@ async function generateTree(opts = {}) {
   // runs the proper foliage pass at full quality. During the drag the user
   // sees a leafless silhouette — exactly what they want for tree-shape work.
   const _scrubFoliage = isScrubbing && !leavesOnly;
-  if (!_scrubFoliage) applyLeafMaterial();
 
   // Move old meshes into a module-level orphan queue instead of disposing
   // immediately. They stay IN-SCENE while the new tree builds (possibly
@@ -8174,6 +8191,14 @@ async function generateTree(opts = {}) {
   // ticks alternate between cached/full-fallback paths). Keep them in scene
   // as visible orphans until endScrub's final-quality rebuild drains them.
   if (!_scrubFoliage) _drainOrphanList(_orphanFoliage);
+  // Materials are applied AFTER the orphan drain so the old tree keeps
+  // its old appearance throughout the build. Now that the orphan is
+  // gone, mutating the singletons only affects the new mesh that just
+  // committed. (Old generateTree applied these at the top — that
+  // instantly retinted the orphan during the worker round-trip, so the
+  // user saw pine bark on an oak silhouette for ~500 ms.)
+  applyBarkMaterial();
+  if (!_scrubFoliage) applyLeafMaterial();
   if (!isScrubbing) {
     updateTreeInfo();
     refreshLODUI();
@@ -12488,41 +12513,15 @@ function _applySpeciesImpl(name) {
       },
     ];
   }
-  // Atomic species swap — hide the current tree during the rebuild so the
-  // user never sees new bark / leaf colours on the old shape during the
-  // 200-1000 ms while generateTree is async-building. Visibility is
-  // restored together with the new geometry below. Without this, the
-  // material updates on the lines below would visibly mutate the old
-  // tree mesh before the new geometry is ready (e.g. pine-coloured leaves
-  // on an oak silhouette for half a second).
-  const _vis = {
-    tree:        treeMesh?.visible,
-    wire:        treeWireMesh?.visible,
-    spline:      treeSplineMesh?.visible,
-    splineDots:  treeSplineDots?.visible,
-    leafA:       leafInstA?.visible,
-    leafB:       leafInstB?.visible,
-    stem:        typeof stemInst !== 'undefined' && stemInst?.visible,
-    cone:        typeof coneInst !== 'undefined' && coneInst?.visible,
-    leafFall:    leafInstFall?.visible,
-  };
-  if (treeMesh)        treeMesh.visible = false;
-  if (treeWireMesh)    treeWireMesh.visible = false;
-  if (treeSplineMesh)  treeSplineMesh.visible = false;
-  if (treeSplineDots)  treeSplineDots.visible = false;
-  if (leafInstA)       leafInstA.visible = false;
-  if (leafInstB)       leafInstB.visible = false;
-  if (typeof stemInst !== 'undefined' && stemInst) stemInst.visible = false;
-  if (typeof coneInst !== 'undefined' && coneInst) coneInst.visible = false;
-  if (leafInstFall)    leafInstFall.visible = false;
-  markRenderDirty(2);
-
+  // Material + leaf-shape updates are deliberately NOT called here.
+  // generateTree commits them itself AFTER the orphan drain (see
+  // line ~8169) so the old tree keeps its old materials and leaf shape
+  // throughout the async build. Calling them here would mutate the
+  // singleton barkMat / leafMat / leafGeo live, instantly changing
+  // the orphaned old tree's appearance mid-build (pine bark on oak
+  // silhouette for the entire 200-1000 ms worker round-trip).
   syncUI();
   renderLevels();
-  applyLeafMaterial();
-  applyBarkMaterial();
-  applyLeafShape();
-  _refreshLeafShapePanel?.();
   // Retune size sliders so the active species sits in a comfortable middle
   // of the track instead of jammed against the left edge of the absolute
   // schema range. Range = current value × 3 (with a sane absolute floor),
@@ -12547,41 +12546,14 @@ function _applySpeciesImpl(name) {
   if (_sb) for (const d of _sb.querySelectorAll('details')) d.open = false;
   const p = generateTree();
   commitHistorySoon();
-  // Restore visibility once the new geometry is in place so the swap
-  // looks atomic. Only restore parts the user actually had on (someone
-  // hidden via the toolbar stays hidden), and only if the build didn't
-  // already toggle them itself. .catch swallows worker failures so a
-  // single bad rebuild can't permanently hide the tree.
+  // Apply the leaf-shape (geometry pointer change) only after the new
+  // tree commits, so the old leaves keep their old shape throughout the
+  // build. generateTree handles the bark/leaf materials itself.
   if (p && typeof p.then === 'function') {
-    p.then(() => {
-      if (treeMesh && _vis.tree) treeMesh.visible = true;
-      if (treeWireMesh && _vis.wire) treeWireMesh.visible = true;
-      if (treeSplineMesh && _vis.spline) treeSplineMesh.visible = true;
-      if (treeSplineDots && _vis.splineDots) treeSplineDots.visible = true;
-      if (leafInstA && _vis.leafA) leafInstA.visible = true;
-      if (leafInstB && _vis.leafB) leafInstB.visible = true;
-      if (typeof stemInst !== 'undefined' && stemInst && _vis.stem) stemInst.visible = true;
-      if (typeof coneInst !== 'undefined' && coneInst && _vis.cone) coneInst.visible = true;
-      if (leafInstFall && _vis.leafFall) leafInstFall.visible = true;
-      markRenderDirty(3);
-    }).catch(() => {
-      // Build failed — make sure we never strand the user with a hidden
-      // tree. Restore whatever was visible before.
-      if (treeMesh && _vis.tree) treeMesh.visible = true;
-      if (leafInstA && _vis.leafA) leafInstA.visible = true;
-      if (leafInstB && _vis.leafB) leafInstB.visible = true;
-      if (typeof stemInst !== 'undefined' && stemInst && _vis.stem) stemInst.visible = true;
-      if (typeof coneInst !== 'undefined' && coneInst && _vis.cone) coneInst.visible = true;
-      markRenderDirty(3);
-    });
+    p.then(() => { applyLeafShape(); _refreshLeafShapePanel?.(); markRenderDirty(3); }).catch(() => {});
   } else {
-    // Sync path (no Promise) — restore immediately.
-    if (treeMesh && _vis.tree) treeMesh.visible = true;
-    if (leafInstA && _vis.leafA) leafInstA.visible = true;
-    if (leafInstB && _vis.leafB) leafInstB.visible = true;
-    if (typeof stemInst !== 'undefined' && stemInst && _vis.stem) stemInst.visible = true;
-    if (typeof coneInst !== 'undefined' && coneInst && _vis.cone) coneInst.visible = true;
-    markRenderDirty(3);
+    applyLeafShape();
+    _refreshLeafShapePanel?.();
   }
   return p;
 }
