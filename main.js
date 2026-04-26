@@ -3489,14 +3489,22 @@ const _leafFinal = new THREE.Color();
 const _leafBack = new THREE.Color();
 function applyLeafMaterial() {
   const season = seasonInfo(P.season ?? 0.2);
-  // Combine seasonal tint with user hue shift; mix toward white by (1 - season strength)
-  const seasonStrength = Math.max(0, (P.season ?? 0.2) - 0.5) * 2; // 0 through spring/summer, rises from 0.5 onward
-  _leafTint.setHSL(
-    ((season.h + (P.leafHueShift ?? 0)) + 1) % 1,
-    Math.min(1, season.s),
-    Math.min(0.85, Math.max(0.35, season.l + 0.15)),
-  );
-  _leafFinal.setRGB(1, 1, 1).lerp(_leafTint, Math.min(1, seasonStrength + Math.abs(P.leafHueShift ?? 0) * 3));
+  if (P.leafColorOverride) {
+    // Manual override — parse the hex directly into _leafFinal and skip the
+    // seasonal/hueShift mixing. Used by blossoming species (cherry, magnolia)
+    // where the spring-pink the user wants doesn't fall on the season curve.
+    try { _leafFinal.set(P.leafColor || '#ffffff'); }
+    catch { _leafFinal.setRGB(1, 1, 1); }
+  } else {
+    // Combine seasonal tint with user hue shift; mix toward white by (1 - season strength)
+    const seasonStrength = Math.max(0, (P.season ?? 0.2) - 0.5) * 2; // 0 through spring/summer, rises from 0.5 onward
+    _leafTint.setHSL(
+      ((season.h + (P.leafHueShift ?? 0)) + 1) % 1,
+      Math.min(1, season.s),
+      Math.min(0.85, Math.max(0.35, season.l + 0.15)),
+    );
+    _leafFinal.setRGB(1, 1, 1).lerp(_leafTint, Math.min(1, seasonStrength + Math.abs(P.leafHueShift ?? 0) * 3));
+  }
   // Backside color — user-tunable hue/brightness, blended toward front by mix amount
   _leafBack.setHSL(P.leafBackHue ?? 0.12, 0.45, P.leafBackLum ?? 0.6);
   const backMix = P.leafBackMix ?? 0;
@@ -6423,51 +6431,49 @@ function reframeToTree() {
 // Called inside generateTree when treeType === 'conifer' so the shared
 // tree-building engine produces a conical pine/spruce/cedar.
 //
-// **WARNING: this REPLACES P.levels every regen.** Manual edits to the
-// Level-1/Level-2 cards on a conifer tree are clobbered the next time the
-// tree rebuilds. To affect conifer shape, edit the cBranch* / cTwig* sliders
-// in the Conifer Shape sidebar — those values feed into the levels here.
-// To customize beyond the conifer schema, switch treeType away from
-// 'conifer' and edit P.levels directly.
+// **MERGES into P.levels[0]/[1] each regen** — only the conifer-managed
+// keys (children/lenRatio/angle/taper/etc.) are overwritten. Any other
+// per-level edits the user made (rollVar, distortion, custom curves,
+// gnarliness overrides…) survive. To completely customize a conifer,
+// switch treeType away from 'conifer' so this function stops running.
 function applyConiferConfigToP() {
-  // Primary whorl-ish branches along the trunk + short twigs.
-  // Conifer branches are thinner at the trunk attachment than broadleaf and
-  // taper hard toward the tip — set radiusRatio + taper here so every conifer
-  // preset gets the right silhouette without needing to spell it out.
-  P.levels = [
-    {
-      ...makeDefaultLevel(),
-      children: P.cBranchCount,
-      lenRatio: P.cBranchLen,
-      angle: P.cBranchAngle,
-      angleVar: 0.1,
-      phyllotaxis: 'spiral',
-      startPlacement: P.cBranchStart,
-      endPlacement: 0.99,
-      apicalDominance: P.cCrownTaper,
-      apicalInverted: true,
-      gravitropism: P.cBranchDroop,
-      phototropism: 0,
-      distortion: 0.06,
-      // Slim attachment + cone taper — real conifer limbs read as needles.
-      radiusRatio: P.cBranchRadiusRatio ?? 0.32,
-      taper: P.cBranchTaper ?? 1.5,
-    },
-    {
-      ...makeDefaultLevel(),
-      children: P.cTwigCount,
-      lenRatio: P.cTwigLen,
-      angle: P.cTwigAngle,
-      angleVar: 0.25,
-      startPlacement: 0.35,
-      endPlacement: 1,
-      apicalDominance: 0.2,
-      phototropism: 0,
-      distortion: 0.1,
-      radiusRatio: P.cTwigRadiusRatio ?? 0.28,
-      taper: P.cTwigTaper ?? 1.4,
-    },
-  ];
+  const l1Patch = {
+    children: P.cBranchCount,
+    lenRatio: P.cBranchLen,
+    angle: P.cBranchAngle,
+    angleVar: 0.1,
+    phyllotaxis: 'spiral',
+    startPlacement: P.cBranchStart,
+    endPlacement: 0.99,
+    apicalDominance: P.cCrownTaper,
+    apicalInverted: true,
+    gravitropism: P.cBranchDroop,
+    phototropism: 0,
+    distortion: 0.06,
+    // Slim attachment + cone taper — real conifer limbs read as needles.
+    radiusRatio: P.cBranchRadiusRatio ?? 0.32,
+    taper: P.cBranchTaper ?? 1.5,
+  };
+  const l2Patch = {
+    children: P.cTwigCount,
+    lenRatio: P.cTwigLen,
+    angle: P.cTwigAngle,
+    angleVar: 0.25,
+    startPlacement: 0.35,
+    endPlacement: 1,
+    apicalDominance: 0.2,
+    phototropism: 0,
+    distortion: 0.1,
+    radiusRatio: P.cTwigRadiusRatio ?? 0.28,
+    taper: P.cTwigTaper ?? 1.4,
+  };
+  if (!Array.isArray(P.levels)) P.levels = [];
+  // Ensure L1 and L2 exist; create from defaults if missing. Then overlay
+  // the conifer-managed keys, leaving all other per-level edits intact.
+  if (!P.levels[0]) P.levels[0] = makeDefaultLevel();
+  if (!P.levels[1]) P.levels[1] = makeDefaultLevel();
+  Object.assign(P.levels[0], l1Patch);
+  Object.assign(P.levels[1], l2Patch);
   // Needle-like leaves
   P.leafSize = P.cNeedleLength;
   P.leavesPerTip = P.cNeedleDensity;
@@ -10718,7 +10724,16 @@ function _buildLeafCreatorPanel() {
   const veinRef = mkColorRow(colorRows, 'Veins',
     () => P.leafProfile.veinColor || '#2f4a22',
     (v) => { P.leafProfile.veinColor = v; });
+  // Manual leaf-color override — bypasses the seasonal palette and hue-shift
+  // pipeline entirely. Pick any colour you want; the override checkbox below
+  // toggles it on/off so the species' season tint is recoverable.
+  const overrideRef = mkColorRow(colorRows, 'Override',
+    () => P.leafColor || '#ffb7d5',
+    (v) => { P.leafColor = v; });
   colorsBody.appendChild(colorRows);
+  colorsBody.appendChild(mkCheckboxRow('Use override',
+    () => !!P.leafColorOverride,
+    (v) => { P.leafColorOverride = v; onEdit(); }));
 
   mkSlider(colorsBody, 'leafHueShift', 'Hue shift', -0.3, 0.3, 0.01);
   mkSlider(colorsBody, 'leafBackHue',  'Back hue',   0,   1,   0.01);
@@ -11672,6 +11687,12 @@ function applySpecies(name) {
   for (const g of BUSH_SCHEMA)    for (const p of g.params) P[p.key] = p.default;
   // Internal toggles that aren't in any schema — reset to match first-load.
   P.leafFacing = 0;
+  // Leaf bend params are conceptually species-level (Palm needs strong curl,
+  // most broadleafs want subtle) but stored as per-tree state. Reset on
+  // species change so a previous species' curl doesn't leak into the next
+  // one; species presets that need stronger values overlay below.
+  P.leafMidribCurl = 0.15;
+  P.leafApexCurl = 0.08;
   P.attractors = [];
   // NOTE: P.leafShape and P.leafProfile are intentionally NOT reset here —
   // the user's chosen leaf shape (preset / Custom / Upload) persists across

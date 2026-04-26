@@ -181,6 +181,12 @@ export const PARAM_SCHEMA = [
     { key: 'leafTransmission',    label: 'Transmission',  min: 0,    max: 1,   step: 0.02, default: 0.45, live: true },
     { key: 'leafThickness',       label: 'Thickness',     min: 0,    max: 2,   step: 0.05, default: 0.35, live: true },
     { key: 'leafHueShift',        label: 'Hue shift',     min: -0.3, max: 0.3, step: 0.01, default: 0,    live: true, swatch: 'hue' },
+    // Manual leaf-color override. When `leafColorOverride` is true, the
+    // material color is set directly from `leafColor` (hex), bypassing the
+    // seasonal palette + hue shift. Lets blossoming species (cherry, magnolia)
+    // pick any sakura/magnolia tone without fighting the season curve.
+    { key: 'leafColorOverride',   label: 'Override on',   type: 'bool',  default: false, live: true, hidden: true },
+    { key: 'leafColor',           label: 'Override',      type: 'color', default: '#ffb7d5', live: true, hidden: true },
     { key: 'leafBackMix',         label: 'Back mix',      min: 0,    max: 1,   step: 0.02, default: 0.35, live: true },
     // --- Advanced (hidden) — diminishing-return polish for hero shots ---
     { key: 'leafIOR',             label: 'IOR',           min: 1.0,  max: 2.0, step: 0.02, default: 1.35, live: true, hidden: true },
@@ -462,7 +468,7 @@ export const SPECIES = {
     leavesPerTip: 28, leafChainSteps: 9, leavesStart: 0, season: 0.05,
     leafClusterSize: 5, leafClusterSpread: 0.75,
     leafPhyllotaxis: 'alternate',
-    leafHueShift: -0.3, leafColorVar: 0.08,
+    leafColorOverride: true, leafColor: '#ffb7d5', leafColorVar: 0.08,
     pruneMode: 'off',
     levels: [
       // L1 — primary scaffold. Six primaries fan outward from the trunk apex
