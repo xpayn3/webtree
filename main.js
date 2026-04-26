@@ -2642,6 +2642,17 @@ function generateBarkTexture(style = 'oak', seed = 1) {
     microPattern: Ps.barkMicroPattern ?? recipe.microPattern ?? 'value',
     palette:     recipe.palette,    // colour stops still come from preset
   };
+  // Snap all frequencies to integers so the texture tiles seamlessly:
+  // - sin(2π·f·u) only wraps at u=0↔u=1 when f is integer
+  // - noise(u·f, …) wraps at u=0↔u=1 only when f is integer (the noise
+  //   itself wraps mod period at integer input steps).
+  // Sliders keep their fine step for UX feel; the generator rounds.
+  // Without this, fractional freqs (e.g. largeFreq=1.5) produce visible
+  // seams where the noise/sin phase doesn't match across u=0↔u=1.
+  p.vertFreq  = Math.max(0, Math.round(p.vertFreq));
+  p.horizFreq = Math.max(0, Math.round(p.horizFreq));
+  p.largeFreq = Math.max(0, Math.round(p.largeFreq));
+  p.microFreq = Math.max(0, Math.round(p.microFreq));
   // Cache key includes every layer field so per-slider tweaks each get
   // their own cached canvas. Palette is implicit in `style`.
   const key = style + ':' + seed + ':' +
@@ -2839,7 +2850,16 @@ function generateBarkThumbnail(style, size = 48) {
   const key = style + ':' + size;
   const cached = _BARK_THUMB_CACHE.get(key);
   if (cached) return cached;
-  const recipe = BARK_STYLES[style] || BARK_STYLES.oak;
+  const recipeRaw = BARK_STYLES[style] || BARK_STYLES.oak;
+  // Snap freqs to integers so the thumb tiles cleanly — same logic as
+  // generateBarkTexture (see comment there for why fractional freqs seam).
+  const recipe = {
+    ...recipeRaw,
+    vertFreq:  Math.max(0, Math.round(recipeRaw.vertFreq)),
+    horizFreq: Math.max(0, Math.round(recipeRaw.horizFreq)),
+    largeFreq: Math.max(0, Math.round(recipeRaw.largeFreq)),
+    microFreq: Math.max(0, Math.round(recipeRaw.microFreq)),
+  };
   const N = size;
   const seed = 1;
   const noiseLarge = _makeTilableNoise(seed, 8);
@@ -8509,10 +8529,10 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   };
 
   scrubber.addEventListener('pointerdown', (e) => {
-    // Middle click = reset to schema default (system-wide on every
-    // scrubber). Same affordance as double-click, but a single press —
-    // useful when iterating fast through "tweak / reset / tweak".
-    if (e.button === 1) {
+    // Ctrl/⌘ + middle click = reset to schema default (system-wide on every
+    // scrubber). Plain middle-click is left alone so it doesn't fire on
+    // accidental clicks while panning the sidebar.
+    if (e.button === 1 && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();  // suppress middle-click autoscroll
       const target = Math.round((p.default - p.min) / p.step);
       applyStep(target, true);
