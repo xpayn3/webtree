@@ -1603,12 +1603,15 @@ const key = new THREE.DirectionalLight(0xfff4ea, 3.4); // near-daylight ~5500 K 
 key.position.set(-7, 13, -11); // behind-left, elevated ~30°
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.left = -22;
-key.shadow.camera.right = 22;
-key.shadow.camera.top = 28;
-key.shadow.camera.bottom = -2;
+// Frustum sized for the new backlight: shadow extends FORWARD of the
+// tree (toward camera) rather than just beneath it, so the ground side
+// (negative-Y in light space) needs more room than the old front-key did.
+key.shadow.camera.left = -28;
+key.shadow.camera.right = 28;
+key.shadow.camera.top = 32;
+key.shadow.camera.bottom = -12;
 key.shadow.camera.near = 0.5;
-key.shadow.camera.far = 60;
+key.shadow.camera.far = 70;
 key.shadow.bias = -0.0015;
 // NB: shadow.radius is ignored by PCFSoftShadowMap — don't set it here.
 scene.add(key);
@@ -2493,6 +2496,113 @@ function _makeTilableNoise(seed, period) {
   };
 }
 
+// Tilable Perlin (gradient) noise. Random unit gradients per cell, quintic
+// fade. Smoother + more organic flow than value noise.
+function _makeTilablePerlin(seed, period) {
+  const grads = new Float32Array(period * period * 2);
+  let s = (seed | 0) >>> 0;
+  for (let i = 0; i < period * period; i++) {
+    s = ((s * 1664525) + 1013904223) >>> 0;
+    const a = ((s & 0xffffff) / 0xffffff) * Math.PI * 2;
+    grads[i * 2    ] = Math.cos(a);
+    grads[i * 2 + 1] = Math.sin(a);
+  }
+  return function (u, v) {
+    const fu = (u - Math.floor(u)) * period;
+    const fv = (v - Math.floor(v)) * period;
+    const ix = Math.floor(fu) % period;
+    const iy = Math.floor(fv) % period;
+    const ix1 = (ix + 1) % period;
+    const iy1 = (iy + 1) % period;
+    const wx = fu - Math.floor(fu);
+    const wy = fv - Math.floor(fv);
+    const fx = wx * wx * wx * (wx * (wx * 6 - 15) + 10);
+    const fy = wy * wy * wy * (wy * (wy * 6 - 15) + 10);
+    const g00 = (iy  * period + ix ) * 2;
+    const g10 = (iy  * period + ix1) * 2;
+    const g01 = (iy1 * period + ix ) * 2;
+    const g11 = (iy1 * period + ix1) * 2;
+    const d00 = grads[g00    ] * wx       + grads[g00 + 1] * wy;
+    const d10 = grads[g10    ] * (wx - 1) + grads[g10 + 1] * wy;
+    const d01 = grads[g01    ] * wx       + grads[g01 + 1] * (wy - 1);
+    const d11 = grads[g11    ] * (wx - 1) + grads[g11 + 1] * (wy - 1);
+    const x0 = d00 + (d10 - d00) * fx;
+    const x1 = d01 + (d11 - d01) * fx;
+    const n = x0 + (x1 - x0) * fy;
+    return Math.max(0, Math.min(1, n * 0.7071 + 0.5));
+  };
+}
+
+// Tilable Worley (cellular F1). One feature point per cell; sample cell +
+// 8 wrapped neighbours, return distance to the nearest feature. Great for
+// scaly / cracked / lenticel patterns.
+function _makeTilableWorley(seed, period) {
+  const pts = new Float32Array(period * period * 2);
+  let s = (seed | 0) >>> 0;
+  for (let i = 0; i < period * period; i++) {
+    s = ((s * 1664525) + 1013904223) >>> 0;
+    pts[i * 2    ] = (s & 0xffffff) / 0xffffff;
+    s = ((s * 1664525) + 1013904223) >>> 0;
+    pts[i * 2 + 1] = (s & 0xffffff) / 0xffffff;
+  }
+  return function (u, v) {
+    const fu = (u - Math.floor(u)) * period;
+    const fv = (v - Math.floor(v)) * period;
+    const cx = Math.floor(fu);
+    const cy = Math.floor(fv);
+    let minD2 = Infinity;
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const nx = ((cx + ox) % period + period) % period;
+        const ny = ((cy + oy) % period + period) % period;
+        const idx = (ny * period + nx) * 2;
+        const px = (cx + ox) + pts[idx    ];
+        const py = (cy + oy) + pts[idx + 1];
+        const dx = fu - px;
+        const dy = fv - py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < minD2) minD2 = d2;
+      }
+    }
+    return Math.min(1, Math.sqrt(minD2));
+  };
+}
+
+// Tilable ridged multifractal — Perlin folded through `1 - |2n - 1|` so
+// zero crossings become sharp peaks. Carved-fissure look.
+function _makeTilableRidged(seed, period) {
+  const p = _makeTilablePerlin(seed, period);
+  return function (u, v) {
+    return 1 - Math.abs(p(u, v) * 2 - 1);
+  };
+}
+
+// Tilable domain warp — two perlins offset the sample point of a third.
+// The output flows like molten rock; impossible to fake with a single
+// noise pass. Strength stays low so it still tiles cleanly.
+function _makeTilableWarp(seed, period) {
+  const base  = _makeTilablePerlin(seed,      period);
+  const warpX = _makeTilablePerlin(seed + 31, period);
+  const warpY = _makeTilablePerlin(seed + 53, period);
+  const STRENGTH = 0.4;
+  return function (u, v) {
+    const dx = (warpX(u, v) - 0.5) * STRENGTH;
+    const dy = (warpY(u, v) - 0.5) * STRENGTH;
+    return base(u + dx, v + dy);
+  };
+}
+
+// Pattern registry — name → factory(seed, period). Schema layers pick a
+// pattern by name; the generator dispatches via this map. Add a new
+// pattern = one entry here + a schema option, nothing else.
+const NOISE_PATTERNS = {
+  value:  _makeTilableNoise,
+  perlin: _makeTilablePerlin,
+  worley: _makeTilableWorley,
+  ridged: _makeTilableRidged,
+  warp:   _makeTilableWarp,
+};
+
 // Returns `{ albedoCanvas, normalCanvas }` — raw HTMLCanvasElements only.
 // The caller swaps these into the long-lived singleton CanvasTexture
 // objects (barkAlbedo / barkNormal) via `.image = canvas; needsUpdate=true`
@@ -2528,6 +2638,8 @@ function generateBarkTexture(style = 'oak', seed = 1) {
     microAmp:    Ps.barkMicroAmp     ?? recipe.microAmp,
     normalStrength: Ps.barkBumpStrength ?? recipe.normalStrength,
     grain:       Ps.barkGrain        ?? recipe.grain,
+    largePattern: Ps.barkLargePattern ?? recipe.largePattern ?? 'value',
+    microPattern: Ps.barkMicroPattern ?? recipe.microPattern ?? 'value',
     palette:     recipe.palette,    // colour stops still come from preset
   };
   // Cache key includes every layer field so per-slider tweaks each get
@@ -2535,8 +2647,8 @@ function generateBarkTexture(style = 'oak', seed = 1) {
   const key = style + ':' + seed + ':' +
     p.vertFreq + ',' + p.vertSharp + ',' + p.vertWobble + ',' + p.vertDepth + ':' +
     p.horizFreq + ',' + p.horizSharp + ',' + p.horizAmp + ':' +
-    p.largeFreq + ',' + p.largeAmp + ':' +
-    p.microFreq + ',' + p.microAmp + ':' +
+    p.largeFreq + ',' + p.largeAmp + ',' + p.largePattern + ':' +
+    p.microFreq + ',' + p.microAmp + ',' + p.microPattern + ':' +
     p.normalStrength + ',' + p.grain;
   const cached = _BARK_TEX_CACHE.get(key);
   if (cached) return cached;
@@ -2549,10 +2661,16 @@ function generateBarkTexture(style = 'oak', seed = 1) {
   const N = 256;
 
   try {
-    // Tilable noise — pre-built grids at multiple scales.
-    const noiseLarge = _makeTilableNoise(seed, 8);
+    // Tilable noise — pre-built grids at multiple scales. Patches and
+    // micro layers dispatch via NOISE_PATTERNS so the user's per-layer
+    // pattern choice (value / perlin / worley / ridged / warp) selects a
+    // different noise function. Wobble and grain stay on plain value
+    // noise — they're support layers, not the visual identity.
+    const largeFn = NOISE_PATTERNS[p.largePattern] || NOISE_PATTERNS.value;
+    const microFn = NOISE_PATTERNS[p.microPattern] || NOISE_PATTERNS.value;
+    const noiseLarge = largeFn(seed, 8);
     const noiseMid   = _makeTilableNoise(seed + 7, 16);
-    const noiseFine  = _makeTilableNoise(seed + 13, 64);
+    const noiseFine  = microFn(seed + 13, 64);
     const noiseGrain = _makeTilableNoise(seed + 23, 128);
 
     // Build the height field once — used for both albedo (palette lookup)

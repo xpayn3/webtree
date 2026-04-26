@@ -100,7 +100,7 @@ export const PARAM_SCHEMA = [
   // for readability.
   { group: 'Bark', params: [
     // ── Style ──
-    { key: 'barkStyle', label: 'Preset', type: 'thumbnails',
+    { key: 'barkStyle', label: 'Preset', type: 'thumbnails', thumbKind: 'barkPreset',
       options: ['oak', 'pine', 'birch', 'cherry', 'smooth', 'eucalyptus', 'palm', 'redwood'], default: 'oak', live: true },
     { key: 'barkSeed', label: 'Variation seed', min: 1, max: 50, step: 1, default: 1, live: true },
     // ── Fissures (vertical layer) ──
@@ -113,8 +113,12 @@ export const PARAM_SCHEMA = [
     { key: 'barkHorizSharp', label: 'Band sharp',       min: 0.5, max: 20,  step: 0.5,  default: 1,    live: true },
     { key: 'barkHorizAmp',   label: 'Band amount',      min: 0,   max: 0.6, step: 0.02, default: 0.12, live: true },
     // ── Detail (patches + micro + grain + bump) ──
+    { key: 'barkLargePattern', label: 'Patches pattern', type: 'thumbnails', thumbKind: 'noise',
+      options: ['value', 'perlin', 'worley', 'warp'], default: 'value', live: true },
     { key: 'barkLargeFreq',    label: 'Patches freq',   min: 0, max: 6,   step: 0.1,   default: 1.5,  live: true },
     { key: 'barkLargeAmp',     label: 'Patches amount', min: 0, max: 0.6, step: 0.02,  default: 0.20, live: true },
+    { key: 'barkMicroPattern', label: 'Micro pattern', type: 'thumbnails', thumbKind: 'noise',
+      options: ['value', 'perlin', 'worley', 'ridged'], default: 'value', live: true },
     { key: 'barkMicroFreq',    label: 'Micro freq',     min: 0, max: 80,  step: 1,     default: 28,   live: true },
     { key: 'barkMicroAmp',     label: 'Micro amount',   min: 0, max: 0.2, step: 0.005, default: 0.06, live: true },
     { key: 'barkGrain',        label: 'Grain',          min: 0, max: 30,  step: 0.5,   default: 6,    live: true },
