@@ -1599,7 +1599,7 @@ function rehydrateTreeFromSoA(tree, chainsIdx) {
 // for when shooting a hero tree at golden hour.
 //
 // `key` is the BACKLIGHT (camera looks toward sun, sun behind tree).
-const key = new THREE.DirectionalLight(0xffd8a0, 3.6); // warm ~3500 K
+const key = new THREE.DirectionalLight(0xfff4ea, 3.4); // near-daylight ~5500 K with a hint of warm
 key.position.set(-7, 13, -11); // behind-left, elevated ~30°
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
@@ -1612,14 +1612,13 @@ key.shadow.camera.far = 60;
 key.shadow.bias = -0.0015;
 // NB: shadow.radius is ignored by PCFSoftShadowMap — don't set it here.
 scene.add(key);
-// Front fill — cool sky-bounce, low intensity, lifts the shadow side
-// without flattening contrast.
-const fill = new THREE.DirectionalLight(0x9bc0ff, 0.55);
+// Front fill — soft cool, lifts the shadow side without flattening contrast.
+const fill = new THREE.DirectionalLight(0xc0d4ee, 0.6);
 fill.position.set(8, 5, 11);
 scene.add(fill);
-// Side rim — warm secondary edge so the wrap continues around the tree
+// Side rim — neutral white edge so the wrap continues around the tree
 // instead of clipping to silhouette on the front.
-const rim = new THREE.DirectionalLight(0xffe6b8, 1.2);
+const rim = new THREE.DirectionalLight(0xffffff, 1.2);
 rim.position.set(11, 7, -3);
 scene.add(rim);
 // Tiny pure-ambient lift so the deepest shadow pockets aren't crushed.
@@ -1628,11 +1627,13 @@ scene.add(ambient);
 
 const LIGHTING_PRESETS = {
   Majestic: {
-    // Hero backlight (warm), cool front fill, warm side rim.
-    // Default — the tree-photo cliché everyone wants.
-    key:     { color: 0xffd8a0, intensity: 3.6, pos: [-7, 13, -11] },
-    fill:    { color: 0x9bc0ff, intensity: 0.55, pos: [8, 5, 11] },
-    rim:     { color: 0xffe6b8, intensity: 1.2, pos: [11, 7, -3] },
+    // Studio backlit hero — neutral daylight key from behind, cool fill
+    // from the front, neutral white side rim. Same backlight DRAMA as
+    // golden hour but without the orange cast (use 'Golden Hour' preset
+    // for that look).
+    key:     { color: 0xfff4ea, intensity: 3.4, pos: [-7, 13, -11] },
+    fill:    { color: 0xc0d4ee, intensity: 0.6, pos: [8, 5, 11] },
+    rim:     { color: 0xffffff, intensity: 1.2, pos: [11, 7, -3] },
     ambient: { color: 0xffffff, intensity: 0.12 },
   },
   Studio: {

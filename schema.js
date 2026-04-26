@@ -1229,6 +1229,7 @@ export const SPECIES = {
     leafClusterSize: 2, leafClusterSpread: 0.4,
     season: 0,
     leafHueShift: -0.03,
+    leafFillColor: '#1f3a1d', leafVeinColor: '#0e1f0e',
     gravityStrength: 0.12, gravityStiffness: 1.0,
   },
 };
