@@ -8596,7 +8596,12 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
     // Swatch sliders draw a pseudo-element thumb at --marker-x — see CSS
     // for `.swatch-hue::before` / `.swatch-color::before`.
     if (isSwatch) scrubber.style.setProperty('--marker-x', `${pct}%`);
-    const v = p.min + step * p.step;
+    const rawV = p.min + step * p.step;
+    // For integer-step sliders, snap the emitted value to match the
+    // displayed integer. Otherwise the display rounds (showing '2') while
+    // setter sends 1.9 — and consumers using `| 0` then truncate back to 1,
+    // so the slider's 'shows 2 but actually 1' bug appears.
+    const v = Number.isInteger(p.step) ? Math.round(rawV) : rawV;
     const text = fmt(v, p.step);
     if (text !== _lastText) { val.textContent = text; _lastText = text; }
     const mod = isModified();
