@@ -5,3 +5,11 @@ MTREE_COMPARISON.md
 NOTES.md
 PRODUCTION_AUDIT.md
 SIDEBAR_AUDIT.md
+
+# Unreferenced PBR / atlas asset packs — ~36 MB, not loaded by the app.
+tex/MT_Acer_platanoides_*
+tex/MT_M_Trunk_*
+tex/MT_NM_Trunk_*
+tex/Plant_Grass_kinis2/
+tex/Plant_Grass_qcihF2/
+tex/Plant_Grass_qcihU2/
