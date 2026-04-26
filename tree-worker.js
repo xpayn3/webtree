@@ -685,14 +685,18 @@ function buildTreeWorker(state) {
       const sinFreq = (P.trunkSinuousFreq ?? 1.0);
       for (let i = 0; i < REF_TRUNK_STEPS; i++) {
         const tN = (i + 0.5) / REF_TRUNK_STEPS;
-        let nX = _smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
-               + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3;
-        let nZ = _smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
-               + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3;
-        const nY = _smoothNoise1D(trunkNoisePhase + tN * 2.4 + 51.7) * 0.12;
+        // Mirror of main.js: ramp jitter / sinuous wander in over the
+        // first 5 % of trunk height so the base ring sits flat.
+        const _u = Math.max(0, Math.min(1, tN / 0.05));
+        const _baseAnchor = _u * _u * (3 - 2 * _u);
+        let nX = (_smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
+               + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3) * _baseAnchor;
+        let nZ = (_smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
+               + _smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3) * _baseAnchor;
+        const nY = _smoothNoise1D(trunkNoisePhase + tN * 2.4 + 51.7) * 0.12 * _baseAnchor;
         if (sinAmt > 0) {
-          nX += _smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq) * sinAmt;
-          nZ += _smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq + 73.1) * sinAmt;
+          nX += _smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq) * sinAmt * _baseAnchor;
+          nZ += _smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq + 73.1) * sinAmt * _baseAnchor;
         }
         let dx = startDirX + nX;
         let dy = startDirY + nY;

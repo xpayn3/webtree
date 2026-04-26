@@ -4766,17 +4766,25 @@ function buildTree(nodesOut) {
       const sinFreq = (P.trunkSinuousFreq ?? 1.0);
       for (let i = 0; i < REF_TRUNK_STEPS; i++) {
         const tN = (i + 0.5) / REF_TRUNK_STEPS;
-        let nX = smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
-               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3;
-        let nZ = smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
-               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3;
-        const nY = smoothNoise1D(trunkNoisePhase + tN * 2.4 + 51.7) * 0.12;
+        // Ramp noise / wander in over the first 5 % of trunk height so the
+        // base ring stays perpendicular to the ground. Without this, the
+        // very first segment picks up jitter at full strength → the curve
+        // tangent at the root is tilted → bottom tube ring tilts → one
+        // edge floats and the opposite edge buries. Smooth (smoothstep)
+        // ramp so there's no visible kink at the transition.
+        const _u = Math.max(0, Math.min(1, tN / 0.05));
+        const _baseAnchor = _u * _u * (3 - 2 * _u);
+        let nX = (smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
+               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3) * _baseAnchor;
+        let nZ = (smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
+               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3) * _baseAnchor;
+        const nY = smoothNoise1D(trunkNoisePhase + tN * 2.4 + 51.7) * 0.12 * _baseAnchor;
         // Low-freq sinuous wander — independent of jAmp so cranking jitter
         // doesn't compound it. Decoupled X/Z phases so the trunk doesn't just
         // bend in one plane.
         if (sinAmt > 0) {
-          nX += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq) * sinAmt;
-          nZ += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq + 73.1) * sinAmt;
+          nX += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq) * sinAmt * _baseAnchor;
+          nZ += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq + 73.1) * sinAmt * _baseAnchor;
         }
         let dx = startDirX + nX;
         let dy = startDirY + nY;
