@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r6';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r6';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r6';
-import { buildRootsGeometry } from './roots.js?v=r6';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r10';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r10';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r10';
+import { buildRootsGeometry } from './roots.js?v=r10';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -8068,6 +8068,52 @@ function speciesIconName(k) {
   if (sp && sp.type === 'bush') return 'sprout';
   return 'tree-deciduous';
 }
+// Per-species blurb shown under the species name in the dropdown — Latin
+// genus + a 2-3 word silhouette / habit hint.
+const SPECIES_INFO = {
+  Custom:         { sub: 'Tabula rasa',           meta: 'Hand-tuned baseline' },
+  // Broadleaf
+  Oak:            { sub: 'Quercus',                meta: 'Spreading deciduous • 8–15 m' },
+  Maple:          { sub: 'Acer',                   meta: 'Dense palmate canopy • 10–15 m' },
+  Cherry:         { sub: 'Prunus',                 meta: 'Spring blossoms • 6–10 m' },
+  Willow:         { sub: 'Salix babylonica',       meta: 'Weeping whips • 8–12 m' },
+  Birch:          { sub: 'Betula',                 meta: 'Slim white trunk • 12–18 m' },
+  Acacia:         { sub: 'Acacia',                 meta: 'Flat savanna crown • 6–12 m' },
+  Olive:          { sub: 'Olea europaea',          meta: 'Twisted Mediterranean • 6–10 m' },
+  Baobab:         { sub: 'Adansonia',              meta: 'Bottle trunk, sparse top • 5–25 m' },
+  Palm:           { sub: 'Arecaceae',              meta: 'Crown of fronds • 8–20 m' },
+  Aspen:          { sub: 'Populus tremuloides',    meta: 'Narrow columnar • 9–18 m' },
+  Tupelo:         { sub: 'Nyssa sylvatica',        meta: 'Dense conical crown • 10–15 m' },
+  Sassafras:      { sub: 'Sassafras albidum',      meta: 'Forky zigzag, mitten leaves • 8–12 m' },
+  Lime:           { sub: 'Tilia (Linden)',         meta: 'Heart leaves, conical • 14–20 m' },
+  Beech:          { sub: 'Fagus',                  meta: 'Smooth gray dome • 12–18 m' },
+  PlaneTree:      { sub: 'Platanus × hispanica',   meta: 'Mottled bark, palmate • 14–20 m' },
+  Ginkgo:         { sub: 'Ginkgo biloba',          meta: 'Fan leaves, golden autumn • 10–15 m' },
+  LombardyPoplar: { sub: "Populus nigra 'Italica'", meta: 'Narrow exclamation point • 16–25 m' },
+  JapaneseMaple:  { sub: 'Acer palmatum',          meta: 'Lacy ornamental, layered • 3–6 m' },
+  Eucalyptus:     { sub: 'Eucalyptus',             meta: 'Tall sparse, lance leaves • 17–30 m' },
+  // Conifers
+  Pine:           { sub: 'Pinus',                  meta: 'Long needles, irregular • 14–20 m' },
+  Spruce:         { sub: 'Picea',                  meta: 'Symmetrical pyramid • 16–22 m' },
+  Cedar:          { sub: 'Cedrus',                 meta: 'Open spreading habit • 14–18 m' },
+  Cypress:        { sub: 'Cupressus',              meta: 'Narrow column • 12–16 m' },
+  Fir:            { sub: 'Abies',                  meta: 'Pyramid-perfect • 18–24 m' },
+  Larch:          { sub: 'Larix',                  meta: 'Deciduous conifer • 14–18 m' },
+  ScotsPine:      { sub: 'Pinus sylvestris',       meta: 'Umbrella crown on top • 13–18 m' },
+  Hemlock:        { sub: 'Tsuga canadensis',       meta: 'Drooping graceful tips • 14–20 m' },
+  Juniper:        { sub: 'Juniperus',              meta: 'Dense rounded shrub • 2–4 m' },
+  Redwood:        { sub: 'Sequoia sempervirens',   meta: 'Massive narrow tower • 20–30 m' },
+  Araucaria:      { sub: 'Monkey Puzzle',          meta: 'Tiered horizontal limbs • 14–20 m' },
+  // Bushes
+  Boxwood:        { sub: 'Buxus sempervirens',     meta: 'Clipped formal hedge • 0.8–2 m' },
+  Lavender:       { sub: 'Lavandula',              meta: 'Upright aromatic sprays • 0.4–0.8 m' },
+  Hydrangea:      { sub: 'Hydrangea',              meta: 'Bold mophead flowers • 1–2 m' },
+  Rosemary:       { sub: 'Rosmarinus officinalis', meta: 'Aromatic woody stems • 0.6–1.2 m' },
+  Holly:          { sub: 'Ilex aquifolium',        meta: 'Spiny evergreen leaves • 1.5–2.5 m' },
+};
+function speciesInfo(k) {
+  return SPECIES_INFO[k] || { sub: '', meta: '' };
+}
 // Sticky container at the top — stays empty here; initSidebarSearch appends
 // the Filter input. The class name is what that init function queries for.
 {
@@ -8117,55 +8163,166 @@ function speciesIconName(k) {
   speciesSelect.addEventListener('change', () => applySpecies(speciesSelect.value));
   wrap.appendChild(speciesSelect);
 
-  const row = document.createElement('div');
-  row.className = 'species-row';
+  // Apple-style data-rich dropdown — full-width trigger shows current species
+  // (icon + name + Latin sub + habit meta); panel shows the same per row.
+  const dd = document.createElement('div');
+  dd.className = 'species-dd';
+  dd.style.cssText = 'position:relative;width:100%;margin-top:8px;';
 
-  const btnLeft = document.createElement('button');
-  btnLeft.type = 'button';
-  btnLeft.className = 'species-scroll-btn species-scroll-left';
-  btnLeft.setAttribute('aria-label', 'Scroll species left');
-  btnLeft.innerHTML = iconSvg('chevron-left', 16);
-  row.appendChild(btnLeft);
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'species-dd-trigger';
+  trigger.style.cssText = 'display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;color:inherit;cursor:pointer;text-align:left;transition:background 120ms,border-color 120ms;';
+  trigger.addEventListener('mouseenter', () => { trigger.style.background = 'rgba(255,255,255,0.07)'; });
+  trigger.addEventListener('mouseleave', () => { trigger.style.background = panel.hidden ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)'; });
 
-  const scroll = document.createElement('div');
-  scroll.className = 'species-scroll';
-  row.appendChild(scroll);
-
-  const btnRight = document.createElement('button');
-  btnRight.type = 'button';
-  btnRight.className = 'species-scroll-btn species-scroll-right';
-  btnRight.setAttribute('aria-label', 'Scroll species right');
-  btnRight.innerHTML = iconSvg('chevron-right', 16);
-  row.appendChild(btnRight);
-
-  wrap.appendChild(row);
-
-  function refreshArrows() {
-    const atStart = scroll.scrollLeft <= 1;
-    const atEnd = scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 1;
-    btnLeft.disabled = atStart;
-    btnRight.disabled = atEnd;
+  const panel = document.createElement('div');
+  panel.className = 'species-dd-panel';
+  panel.hidden = true;
+  // Portaled to body so the sidebar's overflow:hidden / clip doesn't trim it.
+  panel.style.cssText = 'position:fixed;max-height:380px;overflow-y:auto;background:#1c1c1e;border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.45);z-index:9999;padding:6px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.18) transparent;';
+  // Inject a one-time <style> with WebKit scrollbar rules for a sleek
+  // Apple-like overlay scrollbar — inline CSSText can't do pseudo-elements.
+  if (!document.getElementById('species-dd-style')) {
+    const s = document.createElement('style');
+    s.id = 'species-dd-style';
+    s.textContent = `
+.species-dd-panel::-webkit-scrollbar { width: 6px; }
+.species-dd-panel::-webkit-scrollbar-track { background: transparent; }
+.species-dd-panel::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.14);
+  border-radius: 3px;
+  transition: background 120ms;
+}
+.species-dd-panel::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
+.species-dd-panel::-webkit-scrollbar-corner { background: transparent; }
+`;
+    document.head.appendChild(s);
   }
-  btnLeft.addEventListener('click', () => scroll.scrollBy({ left: -220, behavior: 'smooth' }));
-  btnRight.addEventListener('click', () => scroll.scrollBy({ left:  220, behavior: 'smooth' }));
-  scroll.addEventListener('wheel', (e) => {
-    const dx = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    if (dx === 0) return;
-    const maxLeft = scroll.scrollWidth - scroll.clientWidth;
-    const next = scroll.scrollLeft + dx;
-    if ((dx < 0 && scroll.scrollLeft > 0) || (dx > 0 && scroll.scrollLeft < maxLeft)) {
-      e.preventDefault();
-      scroll.scrollLeft = Math.max(0, Math.min(maxLeft, next));
-    }
-  }, { passive: false });
-  scroll.addEventListener('scroll', refreshArrows, { passive: true });
-  new ResizeObserver(refreshArrows).observe(scroll);
+  // Stop bubbling so the document-level "click outside" handler doesn't fire.
+  panel.addEventListener('click', (e) => e.stopPropagation());
 
+  function positionPanel() {
+    const r = trigger.getBoundingClientRect();
+    panel.style.left = `${r.left}px`;
+    panel.style.width = `${r.width}px`;
+    // If there's not enough room below, flip above the trigger.
+    const vh = window.innerHeight;
+    const spaceBelow = vh - r.bottom;
+    const panelMax = 380;
+    if (spaceBelow < 220 && r.top > spaceBelow) {
+      panel.style.top = '';
+      panel.style.bottom = `${vh - r.top + 6}px`;
+      panel.style.maxHeight = `${Math.min(panelMax, r.top - 16)}px`;
+    } else {
+      panel.style.bottom = '';
+      panel.style.top = `${r.bottom + 6}px`;
+      panel.style.maxHeight = `${Math.min(panelMax, spaceBelow - 16)}px`;
+    }
+  }
+
+  function setTriggerContent(k) {
+    const info = speciesInfo(k);
+    trigger.innerHTML = `
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,0.06);flex:0 0 34px;">${iconSvg(speciesIconName(k), 22)}</span>
+      <span style="display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.25;">
+        <span style="font-size:14px;font-weight:600;letter-spacing:-0.01em;">${k}</span>
+        <span style="font-size:11px;opacity:0.55;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${info.sub}</span>
+      </span>
+      <span style="opacity:0.5;flex:0 0 auto;transition:transform 160ms;${panel.hidden ? '' : 'transform:rotate(180deg);'}">${iconSvg('chevron-down', 14)}</span>
+    `;
+  }
+
+  function makeRow(k, isActive) {
+    const info = speciesInfo(k);
+    // Split meta on " • " so we can render the height token as a pill on
+    // its own line. Last segment matching /\d.*m$/ is the height.
+    const parts = (info.meta || '').split(' • ').map((s) => s.trim()).filter(Boolean);
+    let height = '';
+    let habit = '';
+    if (parts.length && /\d.*m$/.test(parts[parts.length - 1])) {
+      height = parts.pop();
+    }
+    habit = parts.join(' • ');
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.dataset.name = k;
+    row.style.cssText = `display:flex;align-items:flex-start;gap:10px;width:100%;padding:9px 10px;background:${isActive ? 'rgba(120,170,255,0.12)' : 'transparent'};border:none;border-radius:8px;color:inherit;cursor:pointer;text-align:left;`;
+    row.innerHTML = `
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,0.06);flex:0 0 34px;color:${isActive ? '#7aaaff' : 'inherit'};margin-top:2px;">${iconSvg(speciesIconName(k), 22)}</span>
+      <span style="display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.3;gap:2px;">
+        <span style="font-size:13.5px;font-weight:${isActive ? '600' : '500'};letter-spacing:-0.01em;color:${isActive ? '#7aaaff' : 'inherit'};">${k}</span>
+        <span style="font-size:11px;opacity:0.6;font-style:italic;">${info.sub}</span>
+        ${habit ? `<span style="font-size:10.5px;opacity:0.4;">${habit}</span>` : ''}
+        ${height ? `<span style="margin-top:3px;"><span style="display:inline-block;font-size:10px;font-weight:500;letter-spacing:0.02em;padding:2px 7px;border-radius:9px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.72);">${height}</span></span>` : ''}
+      </span>
+      ${isActive ? `<span style="color:#7aaaff;flex:0 0 auto;margin-top:9px;">${iconSvg('check', 14)}</span>` : ''}
+    `;
+    row.addEventListener('mouseenter', () => { if (!isActive) row.style.background = 'rgba(255,255,255,0.05)'; });
+    row.addEventListener('mouseleave', () => { if (!isActive) row.style.background = 'transparent'; });
+    row.addEventListener('click', () => {
+      speciesSelect.value = k;
+      panel.hidden = true;
+      setTriggerContent(k);
+      trigger.style.background = 'rgba(255,255,255,0.04)';
+      applySpecies(k);
+    });
+    return row;
+  }
+
+  function openPanel() {
+    // Re-render rows every open so the active highlight always tracks
+    // speciesSelect.value (which can change via clicks elsewhere or
+    // applySpecies mutating it).
+    rebuildRows();
+    panel.hidden = false;
+    positionPanel();
+    setTriggerContent(speciesSelect.value || 'Custom');
+    // Scroll active row into view (next frame so layout has settled).
+    requestAnimationFrame(() => {
+      const active = panel.querySelector('[data-active="1"]');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    });
+  }
+  // Reposition on scroll/resize while open.
+  window.addEventListener('scroll', () => { if (!panel.hidden) positionPanel(); }, true);
+  window.addEventListener('resize', () => { if (!panel.hidden) positionPanel(); });
+  function closePanel() {
+    panel.hidden = true;
+    setTriggerContent(speciesSelect.value || 'Custom');
+    trigger.style.background = 'rgba(255,255,255,0.04)';
+  }
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (panel.hidden) openPanel(); else closePanel();
+  });
+  // Click anywhere outside the dropdown closes it.
+  document.addEventListener('click', () => { if (!panel.hidden) closePanel(); });
+  // Esc to close.
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) closePanel(); });
+
+  dd.appendChild(trigger);
+  document.body.appendChild(panel); // portal — escapes sidebar overflow clip
+  wrap.appendChild(dd);
+
+  function currentKeys() {
+    if (P.treeType === 'conifer') return CONIFER_KEYS;
+    if (P.treeType === 'bush') return BUSH_KEYS;
+    return BROADLEAF_KEYS;
+  }
+  function rebuildRows() {
+    const keys = currentKeys();
+    panel.innerHTML = '';
+    for (const k of keys) {
+      const isActive = k === speciesSelect.value;
+      const row = makeRow(k, isActive);
+      if (isActive) row.dataset.active = '1';
+      panel.appendChild(row);
+    }
+  }
   function rebuild(desired) {
-    let keys;
-    if (P.treeType === 'conifer') keys = CONIFER_KEYS;
-    else if (P.treeType === 'bush') keys = BUSH_KEYS;
-    else keys = BROADLEAF_KEYS;
+    const keys = currentKeys();
     const target = desired ?? speciesSelect.value ?? 'Custom';
     speciesSelect.innerHTML = '';
     for (const k of keys) {
@@ -8174,29 +8331,12 @@ function speciesIconName(k) {
       speciesSelect.appendChild(opt);
     }
     speciesSelect.value = keys.includes(target) ? target : 'Custom';
-    scroll.innerHTML = '';
-    for (const k of keys) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'species-btn' + (speciesSelect.value === k ? ' active' : '');
-      b.dataset.name = k;
-      b.innerHTML = iconSvg(speciesIconName(k), 22) + `<span>${k}</span>`;
-      b.addEventListener('click', () => {
-        speciesSelect.value = k;
-        scroll.querySelectorAll('.species-btn').forEach((x) => x.classList.toggle('active', x.dataset.name === k));
-        applySpecies(k);
-      });
-      scroll.appendChild(b);
-    }
-    // Keep the active card in view when switching tree types.
-    const active = scroll.querySelector('.species-btn.active');
-    if (active) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    refreshArrows();
+    setTriggerContent(speciesSelect.value);
+    rebuildRows();
   }
   rebuild();
   _rebuildSpeciesBand = rebuild;
   sidebarBody.appendChild(wrap);
-  requestAnimationFrame(refreshArrows);
 }
 
 // Trunk Profile — collapsible card under the species dropdown (no longer
