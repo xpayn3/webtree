@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r10';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r10';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r10';
-import { buildRootsGeometry } from './roots.js?v=r10';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r11';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r11';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r11';
+import { buildRootsGeometry } from './roots.js?v=r11';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -1993,42 +1993,29 @@ function makeGridTexture(size, cells, baseColor, minorColor, majorColor) {
     ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
   }
   // Scale label inside one 1 m × 1 m major cell. Picked off-centre so the
-  // tiled copies never land on the tree base. Color is derived from the
-  // floor luminance so it reads on both light and dark themes.
+  // tiled copies never land on the tree base. Drawn in the same colour as
+  // the grid's major lines so it reads as part of the grid graphic, not as
+  // a separate UI overlay. Flipped 180° so it faces the default camera.
   {
     const major = step * 4;          // px per 1 m square
-    // Corner-ish placement — col/row are major-cell indices; tile is 40 wide.
     const labelCol = 5;
     const labelRow = 5;
     const lx = labelCol * major;
     const ly = labelRow * major;
-    // Luminance-aware label color: light text on dark floor, dark on light.
-    const _bh = (baseColor || '#000').replace('#', '');
-    const _hh = _bh.length === 3 ? _bh.split('').map((c) => c + c).join('') : _bh;
-    const _br = parseInt(_hh.slice(0, 2), 16) || 0;
-    const _bg = parseInt(_hh.slice(2, 4), 16) || 0;
-    const _bb = parseInt(_hh.slice(4, 6), 16) || 0;
-    const _lum = (0.2126 * _br + 0.7152 * _bg + 0.0722 * _bb) / 255;
-    const labelColor = _lum < 0.5 ? '#a8a8b0' : '#2a2a30';
+    const cx = lx + major * 0.5;
+    const cy = ly + major * 0.5;
     ctx.save();
     ctx.globalAlpha = 0.85;
-    ctx.strokeStyle = labelColor;
-    ctx.lineWidth = 1.4;
-    // Dimension bracket spanning the full 1 m square width.
-    const yLine = ly + major * 0.66;
-    ctx.beginPath();
-    ctx.moveTo(lx + major * 0.16, yLine);
-    ctx.lineTo(lx + major * 0.84, yLine);
-    ctx.moveTo(lx + major * 0.16, yLine - major * 0.07);
-    ctx.lineTo(lx + major * 0.16, yLine + major * 0.07);
-    ctx.moveTo(lx + major * 0.84, yLine - major * 0.07);
-    ctx.lineTo(lx + major * 0.84, yLine + major * 0.07);
-    ctx.stroke();
-    ctx.fillStyle = labelColor;
+    ctx.fillStyle = majorColor;
     ctx.font = `600 ${Math.round(major * 0.34)}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('1 m', lx + major * 0.5, ly + major * 0.38);
+    // Rotate 180° around the cell centre so the glyphs face the camera
+    // when the texture is mapped onto the floor plane (looking down/forward
+    // from the default orbit pose, the un-flipped text reads upside-down).
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI);
+    ctx.fillText('1 m', 0, 0);
     ctx.restore();
   }
   const tex = new THREE.CanvasTexture(c);
@@ -8196,6 +8183,15 @@ function speciesInfo(k) {
 }
 .species-dd-panel::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
 .species-dd-panel::-webkit-scrollbar-corner { background: transparent; }
+.species-dd-panel::-webkit-scrollbar-button,
+.species-dd-panel::-webkit-scrollbar-button:vertical:start:decrement,
+.species-dd-panel::-webkit-scrollbar-button:vertical:end:increment,
+.species-dd-panel::-webkit-scrollbar-button:vertical:start:increment,
+.species-dd-panel::-webkit-scrollbar-button:vertical:end:decrement {
+  display: none;
+  width: 0;
+  height: 0;
+}
 `;
     document.head.appendChild(s);
   }
