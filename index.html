@@ -3,6 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0e0f" />
+  <meta name="description" content="Windy Tree — a real-time procedural tree generator built on WebGPU and Three.js. Sculpt branches, swap species, tune wind, and export your tree." />
+  <meta name="color-scheme" content="dark light" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Windy Tree — WebGPU procedural trees" />
+  <meta property="og:description" content="Real-time procedural tree generator on WebGPU + Three.js. Sculpt, simulate, export." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Windy Tree — WebGPU procedural trees" />
+  <meta name="twitter:description" content="Real-time procedural tree generator on WebGPU + Three.js. Sculpt, simulate, export." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237fbf6a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z'/><path d='M2 21c0-3 1.85-5.36 5.08-6'/></svg>" />
   <title>WebGPU · Windy Tree</title>
   <link rel="stylesheet" href="style.css" />
   <script type="importmap">
@@ -161,6 +171,86 @@
     <h1>WebGPU not available</h1>
     <p>This demo needs a browser with WebGPU enabled (Chrome, Edge, or Safari 18+).</p>
   </div>
+  <div id="intro-card" hidden>
+    <div class="intro-panel" role="dialog" aria-labelledby="intro-title">
+      <button class="intro-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="intro-hero">
+        <div class="intro-eyebrow">WebGPU · Three.js</div>
+        <h2 id="intro-title" class="intro-title">Windy Tree</h2>
+        <p class="intro-body">A real-time procedural tree generator. Sculpt branches, swap species, tune wind &amp; light, then export your tree.</p>
+      </div>
+
+      <div class="intro-section-label">Pick a tree to start</div>
+      <div class="intro-presets">
+        <button class="preset-card" type="button" data-species="Oak">
+          <span class="preset-art"><img src="presets/oak.png" alt="" loading="lazy"/></span>
+          <span class="preset-name">Oak</span>
+          <span class="preset-tag">Spreading scaffolds</span>
+        </button>
+        <button class="preset-card" type="button" data-species="Cherry">
+          <span class="preset-art"><img src="presets/cherry.png" alt="" loading="lazy"/></span>
+          <span class="preset-name">Cherry</span>
+          <span class="preset-tag">Pink blossom crown</span>
+        </button>
+        <button class="preset-card" type="button" data-species="Birch">
+          <span class="preset-art"><img src="presets/birch.png" alt="" loading="lazy"/></span>
+          <span class="preset-name">Birch</span>
+          <span class="preset-tag">Slender white bark</span>
+        </button>
+        <button class="preset-card" type="button" data-species="Willow">
+          <span class="preset-art"><img src="presets/willow.png" alt="" loading="lazy"/></span>
+          <span class="preset-name">Willow</span>
+          <span class="preset-tag">Cascading fronds</span>
+        </button>
+        <button class="preset-card" type="button" data-species="Pine">
+          <span class="preset-art"><img src="presets/pine.png" alt="" loading="lazy"/></span>
+          <span class="preset-name">Pine</span>
+          <span class="preset-tag">Tall conifer</span>
+        </button>
+        <button class="preset-card" type="button" data-species="Baobab">
+          <span class="preset-art"><img src="presets/baobab.png" alt="" loading="lazy"/></span>
+          <span class="preset-name">Baobab</span>
+          <span class="preset-tag">Bulbous trunk</span>
+        </button>
+      </div>
+
+      <div class="intro-footer">
+        <ul class="intro-tips">
+          <li><b>Drag</b> orbit · <b>scroll</b> zoom</li>
+          <li><b>Right-drag</b> a branch to bend it</li>
+          <li><b>?</b> for full controls</li>
+        </ul>
+        <button class="intro-cta" type="button">Skip — keep current tree</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var KEY = 'windy-tree:intro-dismissed:v1';
+      var card = document.getElementById('intro-card');
+      if (!card) return;
+      try { if (localStorage.getItem(KEY) === '1') return; } catch (e) {}
+      card.hidden = false;
+      function close() {
+        card.classList.add('hide');
+        try { localStorage.setItem(KEY, '1'); } catch (e) {}
+        setTimeout(function () { card.remove(); }, 250);
+      }
+      card.querySelector('.intro-close').addEventListener('click', close);
+      card.querySelector('.intro-cta').addEventListener('click', close);
+      card.addEventListener('click', function (e) { if (e.target === card) close(); });
+      card.querySelectorAll('.preset-card').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var name = btn.getAttribute('data-species');
+          window.__windyPendingSpecies = name;
+          window.dispatchEvent(new CustomEvent('windy:apply-species', { detail: name }));
+          close();
+        });
+      });
+    })();
+  </script>
   <script type="module" src="main.js?v=r18"></script>
 </body>
 </html>

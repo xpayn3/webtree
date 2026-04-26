@@ -4202,7 +4202,7 @@ P.settings = {
   // shadowQuality + bloom into one knob; FPS / triangle stats overlay
   // visibility; auto-orbit for hero shots / screen recordings.
   qualityPreset: 'Balanced',
-  statsVisible: true,
+  statsVisible: false,
   autoOrbit: false,
   autoOrbitSpeed: 8,
 };
@@ -8205,13 +8205,15 @@ async function generateTree(opts = {}) {
   }
   markRenderDirty(3);
   _gtMark('commit');
-  // Print phase breakdown once for any non-trivial build.
+  // Capture phase breakdown for any non-trivial build. Always exposed on
+  // window._gtLastPhases for ad-hoc inspection; only printed to the console
+  // when window.__DEBUG_GT is set, so production builds stay quiet.
   if (typeof window !== 'undefined' && _gtT.length > 1 && (_gtT[_gtT.length-1][1] - _gtT[0][1]) > 50) {
     const out = [];
     for (let i = 1; i < _gtT.length; i++) out.push(`${_gtT[i][0]}=${Math.round(_gtT[i][1] - _gtT[i-1][1])}ms`);
     out.push(`TOTAL=${Math.round(_gtT[_gtT.length-1][1] - _gtT[0][1])}ms`);
-    console.log('[gt]', out.join(' '));
     window._gtLastPhases = out;
+    if (window.__DEBUG_GT) console.log('[gt]', out.join(' '));
   }
   } finally { endBusy(); }
 }
@@ -8584,12 +8586,34 @@ function _forceEndAllScrubs() {
     renderer.shadowMap.needsUpdate = true;
   }
 }
-function fmt(v, step, unit) {
+// Last argument is either:
+//   • a plain unit string (e.g. '°', ' kg') — appended verbatim, OR
+//   • a `display` config { scale, unit, precision } — `v` is multiplied by
+//     `scale` and shown with `precision` decimals + ` unit`. The internal
+//     scene-unit value (and the slider's min/max/step math) is untouched —
+//     this only changes what the user reads. Lets a leaf size stored as
+//     0.10 scene-units render as "10 cm" with no behavior change.
+function fmt(v, step, unitOrDisplay) {
+  let dv = v;
+  let dStep = step;
+  let unit = '';
+  if (unitOrDisplay && typeof unitOrDisplay === 'object') {
+    const d = unitOrDisplay;
+    const scale = d.scale ?? 1;
+    dv = v * scale;
+    dStep = step * scale;
+    unit = d.unit ? ' ' + d.unit : '';
+    if (typeof d.precision === 'number') {
+      return dv.toFixed(d.precision) + unit;
+    }
+  } else if (typeof unitOrDisplay === 'string') {
+    unit = unitOrDisplay;
+  }
   let s;
-  if (Number.isInteger(step)) s = String(Math.round(v));
+  if (Number.isInteger(dStep)) s = String(Math.round(dv));
   else {
-    const digits = step < 0.01 ? 3 : step < 0.1 ? 2 : 1;
-    s = v.toFixed(digits);
+    const digits = dStep < 0.01 ? 3 : dStep < 0.1 ? 2 : 1;
+    s = dv.toFixed(digits);
   }
   return unit ? s + unit : s;
 }
@@ -8682,7 +8706,7 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   const name = document.createElement('span');
   name.className = 'name'; name.textContent = p.label;
   const val = document.createElement('span');
-  val.className = 'val'; val.textContent = fmt(getter(), p.step, p.unit);
+  val.className = 'val'; val.textContent = fmt(getter(), p.step, p.display || p.unit);
   overlay.append(name, val);
   scrubber.appendChild(overlay);
 
@@ -8736,7 +8760,7 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
     // setter sends 1.9 — and consumers using `| 0` then truncate back to 1,
     // so the slider's 'shows 2 but actually 1' bug appears.
     const v = Number.isInteger(p.step) ? Math.round(rawV) : rawV;
-    const text = fmt(v, p.step, p.unit);
+    const text = fmt(v, p.step, p.display || p.unit);
     if (text !== _lastText) { val.textContent = text; _lastText = text; }
     const mod = isModified();
     const modFlipped = (mod !== _lastMod);
@@ -9537,9 +9561,15 @@ function speciesInfo(k) {
       if (active) active.scrollIntoView({ block: 'nearest' });
     });
   }
-  // Reposition on scroll/resize while open.
-  window.addEventListener('scroll', () => { if (!panel.hidden) positionPanel(); }, true);
-  window.addEventListener('resize', () => { if (!panel.hidden) positionPanel(); });
+  // Reposition on scroll/resize while open. rAF-coalesced so a fast scroll
+  // doesn't flush layout for every wheel tick — one reposition per frame.
+  let _posRaf = 0;
+  const _schedReposition = () => {
+    if (panel.hidden || _posRaf) return;
+    _posRaf = requestAnimationFrame(() => { _posRaf = 0; if (!panel.hidden) positionPanel(); });
+  };
+  window.addEventListener('scroll', _schedReposition, true);
+  window.addEventListener('resize', _schedReposition);
   function closePanel() {
     panel.hidden = true;
     setTriggerContent(speciesSelect.value || 'Custom');
@@ -12438,78 +12468,138 @@ function _applySpeciesImpl(name) {
     P.treeType = 'conifer';
     P.pruneMode = 'off';
   } else {
-    // Custom: showcase preset that exercises most of the app's capabilities.
-    // Mature-character broadleaf: strong central leader, buttressed base, moss
-    // on upper surfaces, reaction-wood under horizontal branches, twigs with
-    // leaves on them, dual-sided leaf tint, light canopy dieback, a handful
-    // of dead stubs, and hand-tuned density/length/split curves per level.
+    // Custom: hero showcase preset. A heritage broadleaf tuned to exercise
+    // every recently-shipped knob — gnarliness, sinuous wander, mixed bark
+    // displacement, layered noise patterns (worley patches + ridged micro),
+    // moss on upper surfaces, buttressed flare, reaction wood, Honda-formula
+    // branching, dual-sided leaf tint with sheen + bump, dieback shell, and
+    // dead stubs. Bark UV tiles snapped to ~0.55/m so the pattern reads at
+    // arms-length without cramming.
+    // Realistic-mature broadleaf reference. Numbers match measurements you'd
+    // get standing next to an open-grown oak / maple in a meadow:
+    //   • ~12 m tall, DBH ~80 cm, 5–6 primary scaffolds, leaves ~12 cm.
+    //   • Subtle gnarliness, modest sinuous wander, gentle buttress.
+    //   • Cluster of ~14 leaves at each terminal bud (not 36 — that reads
+    //     as bushy noise instead of foliage).
+    //   • Sheen + clearcoat dialed back: real leaves don't glint like wax.
     Object.assign(P, {
       treeType: 'broadleaf',
-      // Trunk character
-      trunkHeight: 12, trunkScale: 1.05, tipRadius: 0.005, alloExp: 2.45, rootFlare: 0.55,
-      trunkBow: 0.22, trunkLean: 0.08, trunkLeanDir: 25, trunkTwist: 0.06,
-      barkDisplace: 0.35, barkDisplaceFreq: 3.2,
-      buttressAmount: 0.45, buttressHeight: 2.0, buttressLobes: 5,
-      reactionWood: 0.35,
-      // Bark material — moss off by default; users can turn it on from the
-      // Bark sliders if they want the aged-trunk look.
-      barkHue: 0.08, barkTint: 0.32, barkRoughness: 0.9, barkNormalStrength: 1.2,
-      barkTexScaleU: 2.5, barkTexScaleV: 2.2,
-      mossAmount: 0, mossThreshold: 0.4, mossHue: 0.28, mossLum: 0.22,
-      // Global silhouette
-      globalScale: 1.0, shape: 'tend-flame', baseSize: 0.25, rotation: 12,
-      // Foliage
+      // ---- Trunk geometry ----
+      // 12 m tall, ~80 cm DBH (baseRadius 0.4 → diameter 0.8 m).
+      trunkHeight: 12, trunkSteps: 26,
+      baseRadius: 0.4, tipRadius: 0.006, taperExp: 1.7, rootFlare: 1.2,
+      branchWobble: 0.18, branchWobbleFreq: 1.4,
+      trunkLean: 0.08, trunkLeanDir: 30, trunkBow: 0.2,
+      trunkSinuous: 0.22, trunkSinuousFreq: 0.6,
+      trunkJitter: 0.015,
+      // Surface — modest displacement; real bark relief is 1–3 cm on a
+      // 80 cm trunk, not the 6 cm canyons the previous 0.55 was producing.
+      barkDisplaceMode: 'mixed',
+      barkDisplace: 0.32, barkDisplaceFreq: 3.2,
+      barkRidgeSharp: 0.6, barkVerticalBias: 0.85,
+      barkKnots: 0.12, barkKnotScale: 2.6,
+      barkDetail: 0.12, barkDetailFreq: 16,
+      buttressAmount: 0.32, buttressHeight: 1.8, buttressLobes: 5,
+      reactionWood: 0.15,
+      // ---- Bark material ----
+      barkStyle: 'oak', barkSeed: 7,
+      barkVertFreq: 5, barkVertSharp: 6, barkVertDepth: 0.45, barkVertWobble: 0.08,
+      barkHorizFreq: 7, barkHorizSharp: 1.2, barkHorizAmp: 0.14,
+      barkLargePattern: 'worley', barkLargeFreq: 3, barkLargeAmp: 0.22,
+      barkMicroPattern: 'ridged', barkMicroFreq: 28, barkMicroAmp: 0.06,
+      barkGrain: 6, barkBumpStrength: 4.5,
+      barkHue: 0.08, barkTint: 0.12, barkSaturation: 1.0, barkBrightness: 0.95,
+      barkRoughness: 0.95, barkNormalStrength: 1.1,
+      // UV tiling — 0.55 / 0.6 → bark pattern repeats every ~1.8 m, matching
+      // real fissure spacing on a mature oak. (Was 2.5/2.2 — too small.)
+      barkTexScaleU: 0.55, barkTexScaleV: 0.6, barkRotation: 0,
+      mossAmount: 0,
+      // ---- Global silhouette + branching formula ----
+      globalScale: 1.0, shape: 'free', baseSize: 0.2, minLen: 0.28,
+      branchModel: 'honda', hondaR1: 0.93, hondaR2: 0.84,
+      // Mature open-grown crown sags noticeably under its own mass.
+      gravityStrength: 0.45, gravityStiffness: 0.65,
+      rotation: 18,
+      // ---- Foliage ----
+      // Norway/sugar maple leaves are 8–15 cm — 0.13 sits in that range.
       leafShape: 'Maple',
-      leafSize: 0.18, leafSpread: 0.38, leafStemLen: 0,
-      leavesPerTip: 38, leafChainSteps: 8, leavesStart: 0.15, season: 0.68,
-      leafClusterSize: 3, leafClusterSpread: 0.55, leafMaxRadius: 0.14,
-      leafPhyllotaxis: 'spiral', leafTilt: 0.3, leafColorVar: 0.12,
-      leafRoughness: 0.55, leafTransmission: 0.55, leafThickness: 0.35,
-      leafClearcoat: 0.3, leafClearcoatRough: 0.35,
-      leafBackHue: 0.13, leafBackLum: 0.62, leafBackMix: 0.4,
-      // Canopy shell + dead wood
-      dieback: 0.15, diebackOuter: 0.55,
-      stubsEnable: 'on', stubsChance: 0.22, stubsLength: 0.45, stubsTaper: 0.6,
+      leafSize: 0.13, leafSizeVar: 0.35, leafQuality: 'bent',
+      leafSpread: 0.45, leafDroop: 0.1, leafTilt: 0.25,
+      leafPhyllotaxis: 'alternate',
+      // Real terminal bud carries 5–15 leaves, not 36.
+      leavesPerTip: 14, leafChainSteps: 5, leavesStart: 0.08, season: 0.55,
+      leafClusterSize: 3, leafClusterSpread: 0.55,
+      // Leaves only on twigs <6 cm radius — keeps them off the major scaffolds.
+      leafMaxRadius: 0.06,
+      leafColorVar: 0.1,
+      // Petioles
+      leafStemLen: 0.03, leafStemAngle: 0.4, leafStemThick: 1.0,
+      // PBR — restrained sheen / clearcoat so leaves don't read as plastic.
+      leafRoughness: 0.6, leafTransmission: 0.55, leafThickness: 0.2,
+      leafNormalStrength: 0.6, leafSheen: 0.1, leafBumpScale: 0.018,
+      leafClearcoat: 0.08, leafClearcoatRough: 0.4,
+      leafBackHue: 0.13, leafBackLum: 0.6, leafBackMix: 0.4,
+      // Subtle leaf curl — real maple leaves have a soft midrib bow.
+      leafMidribCurl: 0.16, leafApexCurl: 0.08,
+      // ---- Canopy shell + dead wood ----
+      dieback: 0.08, diebackOuter: 0.6,
+      stubsEnable: 'on', stubsChance: 0.1, stubsLength: 0.45, stubsTaper: 0.6,
+      stubsHue: 0.08, stubsLum: 0.18,
       pruneMode: 'off',
     });
     P.levels = [
+      // L1 — primary scaffold. Open-grown oak/maple has 5–7 primaries at
+      // ~55–70° from vertical; Honda continuation supplies the soft central
+      // leader so we don't need a high apicalDominance ramp.
       { ...makeDefaultLevel(),
-        children: 12, lenRatio: 0.52, angle: 0.98, angleVar: 0.28, rollVar: 0.85,
+        children: 6, lenRatio: 0.62, radiusRatio: 0.6, taper: 1,
+        angle: 1.0, angleVar: 0.22, rollVar: 0.9,
         startPlacement: 0.22, endPlacement: 1,
-        apicalDominance: 0.25, apicalContinue: 0.55, angleDecline: -0.25,
-        distortion: 0.22, distortionType: 'perlin', distortionFreq: 2.5,
-        curveMode: 'sCurve', curveAmount: 0.35, curveBack: -0.22,
-        segSplits: 0.25, splitAngle: 0.38, susceptibility: 1.5, gravitropism: 0.015,
-        densityPoints: [0.4, 0.85, 1, 1, 0.9],
-        lengthPoints: [0.55, 1, 1.08, 0.95, 0.55],
-        splitPoints: [0.3, 0.8, 1, 0.85, 0.5],
+        apicalDominance: 0.15, apicalContinue: 0.4, angleDecline: -0.1,
+        wobble: 0.15, wobbleFreq: 1.2,
+        distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.0,
+        curveMode: 'sCurve', curveAmount: 0.32, curveBack: -0.22,
+        segSplits: 0.2, splitAngle: 0.35, susceptibility: 1.4, gravitropism: 0.025,
+        densityPoints: [0.45, 0.9, 1, 1, 0.85],
+        lengthPoints: [0.6, 1, 1.05, 0.95, 0.6],
       },
+      // L2 — secondary scaffold. 5–7 children per primary in the field.
       { ...makeDefaultLevel(),
-        children: 8, lenRatio: 0.62, angle: 0.72, angleVar: 0.22,
+        children: 6, lenRatio: 0.62, radiusRatio: 0.58, taper: 1.1,
+        angle: 0.78, angleVar: 0.22, rollVar: 0.85,
         startPlacement: 0.2, endPlacement: 1,
-        apicalDominance: 0.15, apicalContinue: 0.3,
-        distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.8,
-        curveMode: 'sCurve', curveAmount: 0.3, curveBack: -0.35,
-        segSplits: 0.18, splitAngle: 0.32, gravitropism: 0.025, susceptibility: 1.6,
-        densityPoints: [0.5, 0.9, 1, 0.95, 0.7],
-        lengthPoints: [0.7, 1, 1.02, 0.9, 0.7],
-        splitPoints: [0.4, 0.9, 1, 0.8, 0.4],
+        apicalDominance: 0.1, apicalContinue: 0.2,
+        wobble: 0.2, wobbleFreq: 1.8,
+        distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.6,
+        curveMode: 'sCurve', curveAmount: 0.28, curveBack: -0.25,
+        segSplits: 0.15, splitAngle: 0.3, gravitropism: 0.045, susceptibility: 1.5,
+        densityPoints: [0.55, 0.92, 1, 0.95, 0.75],
+        lengthPoints: [0.75, 1, 1, 0.92, 0.72],
       },
+      // L3 — tertiary, starts to sag under its own weight.
       { ...makeDefaultLevel(),
-        children: 6, lenRatio: 0.58, angle: 0.58,
+        children: 5, lenRatio: 0.55, radiusRatio: 0.55, taper: 1.2,
+        angle: 0.6, angleVar: 0.2, rollVar: 0.9,
+        startPlacement: 0.22, endPlacement: 1,
+        apicalContinue: 0.1,
+        wobble: 0.28, wobbleFreq: 2.4,
+        distortion: 0.18, distortionType: 'perlin', distortionFreq: 3.0,
+        stochastic: 0.12,
+        curveMode: 'backCurve', curveAmount: 0.22, gravitropism: 0.08,
+        densityPoints: [0.6, 0.92, 1, 0.95, 0.75],
+        lengthPoints: [0.82, 1, 1, 0.92, 0.75],
+      },
+      // L4 — twig layer: short, drooping, mildly wiggled.
+      { ...makeDefaultLevel(),
+        children: 4, lenRatio: 0.42, radiusRatio: 0.5, taper: 1.3,
+        angle: 0.5, angleVar: 0.22, rollVar: 0.95,
         startPlacement: 0.25, endPlacement: 1,
-        apicalContinue: 0.15,
-        distortion: 0.15, stochastic: 0.18,
-        curveMode: 'backCurve', curveAmount: 0.25, gravitropism: 0.03,
-        densityPoints: [0.5, 0.9, 1, 0.95, 0.75],
-        lengthPoints: [0.8, 1, 1, 0.9, 0.7],
-      },
-      { ...makeDefaultLevel(),
-        children: 4, lenRatio: 0.48, angle: 0.48,
-        startPlacement: 0.3, endPlacement: 1,
-        distortion: 0.12, stochastic: 0.22, gravitropism: 0.035,
-        densityPoints: [0.6, 0.9, 1, 0.95, 0.8],
-        lengthPoints: [0.85, 1, 1, 0.95, 0.8],
+        wobble: 0.4, wobbleFreq: 3.0,
+        distortion: 0.22, distortionType: 'perlin', distortionFreq: 3.6,
+        stochastic: 0.18,
+        curveMode: 'backCurve', curveAmount: 0.25, gravitropism: 0.16,
+        densityPoints: [0.65, 0.92, 1, 0.95, 0.85],
+        lengthPoints: [0.9, 1, 1, 0.95, 0.88],
       },
     ];
   }
@@ -15751,7 +15841,70 @@ async function _precompilePipelines() {
 // Apply the Custom showcase preset on first load so the initial tree matches
 // what the user sees after picking another species and returning to Custom.
 // Without this, the first tree renders from raw schema defaults only.
-const _firstGrow = applySpecies('Custom');
+// Honor a pre-boot species choice from the welcome card so the first frame
+// already matches what the user picked.
+const _bootSpecies = (typeof window !== 'undefined' && window.__windyPendingSpecies)
+  ? window.__windyPendingSpecies
+  : 'Custom';
+window.__windyPendingSpecies = null;
+window.addEventListener('windy:apply-species', (e) => {
+  const name = e && e.detail;
+  if (name && SPECIES[name]) applySpecies(name);
+});
+// Debug helper: capture thumbnails for a list of species. Resumes the
+// render loop, applies each species, awaits the build, renders a fresh
+// frame, and grabs a square-cropped PNG dataURL. Returns { name: dataURL }.
+window.__captureSpecies = async function (names = ['Oak','Cherry','Birch','Willow','Pine','Baobab'], size = 360, cropFrac = 0.92, settleMs = 5500) {
+  const out = {};
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const canvas = renderer.domElement;
+  for (const name of names) {
+    resumeFromPause();
+    await applySpecies(name);
+    // Long settle for foliage worker + LOD pipeline to commit.
+    await sleep(settleMs);
+    resumeFromPause();
+
+    // Frame the camera to the tree bounds so each species renders at
+    // the same visual scale regardless of trunkHeight / crown size.
+    if (typeof treeMesh !== 'undefined' && treeMesh) {
+      const box = new THREE.Box3().setFromObject(treeMesh);
+      // Foliage instance bounds aren't in treeMesh — pad with leaf inst if present.
+      try {
+        if (typeof leafInstA !== 'undefined' && leafInstA) box.expandByObject(leafInstA);
+      } catch (_) {}
+      if (!box.isEmpty()) {
+        const center = box.getCenter(new THREE.Vector3());
+        const sizeV  = box.getSize(new THREE.Vector3());
+        const radius = Math.max(sizeV.x, sizeV.y, sizeV.z) * 0.55;
+        const fov = camera.fov * Math.PI / 180;
+        const dist = radius / Math.tan(fov / 2) * 1.05;
+        camera.position.set(center.x, center.y + sizeV.y * 0.05, center.z + dist);
+        controls.target.copy(center);
+        camera.updateProjectionMatrix();
+        controls.update();
+      }
+    }
+
+    await sleep(250);
+    await postProcessing.render();
+    await postProcessing.render();
+
+    const fullUrl = canvas.toDataURL('image/png');
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = fullUrl; });
+    const sw = img.naturalWidth, sh = img.naturalHeight;
+    const crop = Math.min(sw, sh) * cropFrac;
+    const sx = (sw - crop) / 2;
+    const sy = (sh - crop) / 2;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    c.getContext('2d').drawImage(img, sx, sy, crop, crop, 0, 0, size, size);
+    out[name] = c.toDataURL('image/png');
+  }
+  return out;
+};
+const _firstGrow = applySpecies(_bootSpecies);
 if (_firstGrow && typeof _firstGrow.then === 'function') {
   _firstGrow
     .catch((err) => { console.error('[boot] first generateTree failed:', err); })
