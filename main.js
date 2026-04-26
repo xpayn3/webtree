@@ -12481,6 +12481,35 @@ function _applySpeciesImpl(name) {
       },
     ];
   }
+  // Atomic species swap — hide the current tree during the rebuild so the
+  // user never sees new bark / leaf colours on the old shape during the
+  // 200-1000 ms while generateTree is async-building. Visibility is
+  // restored together with the new geometry below. Without this, the
+  // material updates on the lines below would visibly mutate the old
+  // tree mesh before the new geometry is ready (e.g. pine-coloured leaves
+  // on an oak silhouette for half a second).
+  const _vis = {
+    tree:        treeMesh?.visible,
+    wire:        treeWireMesh?.visible,
+    spline:      treeSplineMesh?.visible,
+    splineDots:  treeSplineDots?.visible,
+    leafA:       leafInstA?.visible,
+    leafB:       leafInstB?.visible,
+    stem:        typeof stemInst !== 'undefined' && stemInst?.visible,
+    cone:        typeof coneInst !== 'undefined' && coneInst?.visible,
+    leafFall:    leafInstFall?.visible,
+  };
+  if (treeMesh)        treeMesh.visible = false;
+  if (treeWireMesh)    treeWireMesh.visible = false;
+  if (treeSplineMesh)  treeSplineMesh.visible = false;
+  if (treeSplineDots)  treeSplineDots.visible = false;
+  if (leafInstA)       leafInstA.visible = false;
+  if (leafInstB)       leafInstB.visible = false;
+  if (typeof stemInst !== 'undefined' && stemInst) stemInst.visible = false;
+  if (typeof coneInst !== 'undefined' && coneInst) coneInst.visible = false;
+  if (leafInstFall)    leafInstFall.visible = false;
+  markRenderDirty(2);
+
   syncUI();
   renderLevels();
   applyLeafMaterial();
@@ -12511,6 +12540,42 @@ function _applySpeciesImpl(name) {
   if (_sb) for (const d of _sb.querySelectorAll('details')) d.open = false;
   const p = generateTree();
   commitHistorySoon();
+  // Restore visibility once the new geometry is in place so the swap
+  // looks atomic. Only restore parts the user actually had on (someone
+  // hidden via the toolbar stays hidden), and only if the build didn't
+  // already toggle them itself. .catch swallows worker failures so a
+  // single bad rebuild can't permanently hide the tree.
+  if (p && typeof p.then === 'function') {
+    p.then(() => {
+      if (treeMesh && _vis.tree) treeMesh.visible = true;
+      if (treeWireMesh && _vis.wire) treeWireMesh.visible = true;
+      if (treeSplineMesh && _vis.spline) treeSplineMesh.visible = true;
+      if (treeSplineDots && _vis.splineDots) treeSplineDots.visible = true;
+      if (leafInstA && _vis.leafA) leafInstA.visible = true;
+      if (leafInstB && _vis.leafB) leafInstB.visible = true;
+      if (typeof stemInst !== 'undefined' && stemInst && _vis.stem) stemInst.visible = true;
+      if (typeof coneInst !== 'undefined' && coneInst && _vis.cone) coneInst.visible = true;
+      if (leafInstFall && _vis.leafFall) leafInstFall.visible = true;
+      markRenderDirty(3);
+    }).catch(() => {
+      // Build failed — make sure we never strand the user with a hidden
+      // tree. Restore whatever was visible before.
+      if (treeMesh && _vis.tree) treeMesh.visible = true;
+      if (leafInstA && _vis.leafA) leafInstA.visible = true;
+      if (leafInstB && _vis.leafB) leafInstB.visible = true;
+      if (typeof stemInst !== 'undefined' && stemInst && _vis.stem) stemInst.visible = true;
+      if (typeof coneInst !== 'undefined' && coneInst && _vis.cone) coneInst.visible = true;
+      markRenderDirty(3);
+    });
+  } else {
+    // Sync path (no Promise) — restore immediately.
+    if (treeMesh && _vis.tree) treeMesh.visible = true;
+    if (leafInstA && _vis.leafA) leafInstA.visible = true;
+    if (leafInstB && _vis.leafB) leafInstB.visible = true;
+    if (typeof stemInst !== 'undefined' && stemInst && _vis.stem) stemInst.visible = true;
+    if (typeof coneInst !== 'undefined' && coneInst && _vis.cone) coneInst.visible = true;
+    markRenderDirty(3);
+  }
   return p;
 }
 
