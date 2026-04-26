@@ -2752,11 +2752,20 @@ function generateBarkTexture(style = 'oak', seed = 1) {
         const u = x / N;
         let h = 0.5;
 
+        // Round U-axis frequencies to integers so the bark texture wraps
+        // seamlessly around the trunk circumference. Sine/value-noise
+        // sampling in u only tiles cleanly at integer multiples of the
+        // unit interval. (horizFreq runs along v / trunk height — its
+        // wrap is hidden inside geometry, no integer needed.)
+        const _vF = Math.max(0, Math.round(p.vertFreq));
+        const _lF = Math.max(0, Math.round(p.largeFreq));
+        const _mF = Math.max(0, Math.round(p.microFreq));
+
         // Vertical fissures — sin wave with noise wobble. Pure sin in u
         // tiles automatically; noise wobble uses tilable noise.
-        if (p.vertFreq > 0 && p.vertDepth > 0) {
+        if (_vF > 0 && p.vertDepth > 0) {
           const wobble = (noiseMid(u * 4, v * 8) - 0.5) * p.vertWobble;
-          const fissure = Math.sin((u + wobble) * Math.PI * 2 * p.vertFreq);
+          const fissure = Math.sin((u + wobble) * Math.PI * 2 * _vF);
           const sharp = Math.pow(Math.max(0, 1 - Math.abs(fissure)), p.vertSharp);
           h -= sharp * p.vertDepth;
         }
@@ -2771,13 +2780,13 @@ function generateBarkTexture(style = 'oak', seed = 1) {
         }
 
         // Large-scale variation — patchy regions across the trunk.
-        if (p.largeAmp > 0) {
-          h += (noiseLarge(u * p.largeFreq, v * p.largeFreq) - 0.5) * p.largeAmp;
+        if (p.largeAmp > 0 && _lF > 0) {
+          h += (noiseLarge(u * _lF, v * _lF) - 0.5) * p.largeAmp;
         }
 
         // Micro detail — final fine bump pattern.
-        if (p.microAmp > 0) {
-          h += (noiseFine(u * p.microFreq, v * p.microFreq) - 0.5) * p.microAmp;
+        if (p.microAmp > 0 && _mF > 0) {
+          h += (noiseFine(u * _mF, v * _mF) - 0.5) * p.microAmp;
         }
 
         height[y * N + x] = Math.max(0, Math.min(1, h));
@@ -2932,14 +2941,22 @@ function generateBarkThumbnail(style, size = 48) {
   const data = img.data;
   const pal = recipe.palette;
   const grainAmp = recipe.grain || 0;
+  // Round U-axis frequencies to integers so the texture tiles seamlessly
+  // around the trunk circumference (u=0 must equal u=1). Sine waves and
+  // tilable-noise lookups only wrap cleanly at integer multiples of u.
+  // horizFreq stays continuous because it samples v (trunk height), where
+  // the wrap is hidden inside trunk geometry, not at a visible seam.
+  const vFreq    = Math.max(0, Math.round(recipe.vertFreq));
+  const lFreq    = Math.max(0, Math.round(recipe.largeFreq));
+  const mFreq    = Math.max(0, Math.round(recipe.microFreq));
   for (let y = 0; y < N; y++) {
     const v = y / N;
     for (let x = 0; x < N; x++) {
       const u = x / N;
       let h = 0.5;
-      if (recipe.vertFreq > 0 && recipe.vertDepth > 0) {
+      if (vFreq > 0 && recipe.vertDepth > 0) {
         const wobble = (noiseMid(u * 4, v * 8) - 0.5) * recipe.vertWobble;
-        const fissure = Math.sin((u + wobble) * Math.PI * 2 * recipe.vertFreq);
+        const fissure = Math.sin((u + wobble) * Math.PI * 2 * vFreq);
         h -= Math.pow(Math.max(0, 1 - Math.abs(fissure)), recipe.vertSharp) * recipe.vertDepth;
       }
       if (recipe.horizFreq > 0 && recipe.horizAmp > 0) {
@@ -2947,8 +2964,8 @@ function generateBarkThumbnail(style, size = 48) {
         const band = Math.sin((v + wobble) * Math.PI * 2 * recipe.horizFreq);
         h += (Math.pow(Math.max(0, 1 - Math.abs(band)), recipe.horizSharp) - 0.5) * recipe.horizAmp;
       }
-      if (recipe.largeAmp > 0) h += (noiseLarge(u * recipe.largeFreq, v * recipe.largeFreq) - 0.5) * recipe.largeAmp;
-      if (recipe.microAmp > 0) h += (noiseFine(u * recipe.microFreq, v * recipe.microFreq) - 0.5) * recipe.microAmp;
+      if (recipe.largeAmp > 0 && lFreq > 0) h += (noiseLarge(u * lFreq, v * lFreq) - 0.5) * recipe.largeAmp;
+      if (recipe.microAmp > 0 && mFreq > 0) h += (noiseFine(u * mFreq, v * mFreq) - 0.5) * recipe.microAmp;
       h = Math.max(0, Math.min(1, h));
       let r, g, b;
       if (h < 0.5) {
