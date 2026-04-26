@@ -36,12 +36,12 @@ export const PARAM_SCHEMA = [
     { key: 'trunkJitter', label: 'Jitter', min: 0, max: 0.5, step: 0.005, default: 0.025, hidden: true },
     // Splitting
     { key: 'trunkCount', label: 'Trunk count', min: 1, max: 5, step: 1, default: 1 },
-    { key: 'trunkSplitSpread', label: 'Split spread', min: 0.1, max: 1.5, step: 0.05, default: 0.45 },
+    { key: 'trunkSplitSpread', label: 'Split spread', min: 0.002, max: 1.5, step: 0.005, default: 0.45 },
     // 0 = trunks fan from the ground (current legacy behavior).
     // >0 = trunks share a single base, then diverge at this fraction of trunk
     // height — produces a Y / V fork. Above ~0.7 you get tightly stacked
     // co-dominant leaders typical of cherry, beech, maple.
-    { key: 'trunkSplitHeight', label: 'Split height', min: 0, max: 0.9, step: 0.02, default: 0 },
+    { key: 'trunkSplitHeight', label: 'Split height', min: 0, max: 0.9, step: 0.005, default: 0 },
     { key: 'trunkTwist',       label: 'Twist',        min: -2,   max: 2,    step: 0.01, default: 0, hidden: true },
     // Pose — lean angle tilts the trunk base; lean direction is the heading
     // of that tilt. Bow bends the trunk along a subtle S-curve as it grows.
