@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r13';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r13';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r13';
-import { buildRootsGeometry } from './roots.js?v=r13';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r14';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r14';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r14';
+import { buildRootsGeometry } from './roots.js?v=r14';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -3973,8 +3973,15 @@ function buildTree(nodesOut) {
       const tN = (i + 0.5) / P.trunkSteps;
       if (useDelayedSplit && tk > 0 && tN < trunkSplitHeight) continue;
       const refIdxF = tN * REF_TRUNK_STEPS - 0.5;
-      const ri0 = Math.max(0, Math.floor(refIdxF));
-      const ri1 = Math.min(REF_TRUNK_STEPS - 1, ri0 + 1);
+      // Clamp BOTH ends — if tN/refIdxF were ever NaN or > 1 (e.g. an
+      // unsanitized P.trunkSteps), Math.floor/min still need a safe ceiling.
+      let ri0 = Math.max(0, Math.min(REF_TRUNK_STEPS - 1, Math.floor(refIdxF) | 0));
+      let ri1 = Math.max(0, Math.min(REF_TRUNK_STEPS - 1, ri0 + 1));
+      if (!refSteps[ri0]) {
+        if (typeof console !== 'undefined') console.warn('[buildTree] refSteps miss', { ri0, ri1, refIdxF, tN, trunkSteps: P.trunkSteps, len: refSteps.length });
+        ri0 = 0; ri1 = Math.min(1, refSteps.length - 1);
+        if (!refSteps[ri0]) continue; // can't recover, skip this trunk node
+      }
       const u = Math.max(0, Math.min(1, refIdxF - ri0));
       const nPos = refSteps[ri0].pos.clone().lerp(refSteps[ri1].pos, u);
       lerpDir.copy(refSteps[ri0].dir).lerp(refSteps[ri1].dir, u);

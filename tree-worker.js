@@ -732,8 +732,14 @@ function buildTreeWorker(state) {
       const tN = (i + 0.5) / P.trunkSteps;
       if (useDelayedSplit && tk > 0 && tN < trunkSplitHeight) continue;
       const refIdxF = tN * REF_TRUNK_STEPS - 0.5;
-      const ri0 = Math.max(0, Math.floor(refIdxF));
-      const ri1 = Math.min(REF_TRUNK_STEPS - 1, ri0 + 1);
+      // Mirror of main.js — clamp BOTH ends so a NaN/out-of-range tN can't
+      // index into undefined.
+      let ri0 = Math.max(0, Math.min(REF_TRUNK_STEPS - 1, Math.floor(refIdxF) | 0));
+      let ri1 = Math.max(0, Math.min(REF_TRUNK_STEPS - 1, ri0 + 1));
+      if (!refSteps[ri0]) {
+        ri0 = 0; ri1 = Math.min(1, refSteps.length - 1);
+        if (!refSteps[ri0]) continue;
+      }
       const u = Math.max(0, Math.min(1, refIdxF - ri0));
       const nPos = refSteps[ri0].pos.clone().lerp(refSteps[ri1].pos, u);
       lerpDir.copy(refSteps[ri0].dir).lerp(refSteps[ri1].dir, u);
