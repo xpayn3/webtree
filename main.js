@@ -2245,15 +2245,17 @@ function applyTheme(name) {
     new THREE.PlaneGeometry(18, 18),
     new THREE.MeshBasicMaterial({
       map: tex, transparent: true, depthWrite: false,
-      // No polygon offset — the previous -4/-4 was pulling the shadow
-      // forward in the depth buffer enough that it rendered OVER the
-      // bottom rings of any vertical geometry (trunk base, avatar legs),
-      // producing a dark band wherever an object met the ground. A small
-      // physical y-offset is enough to clear z-fight with the cyc.
+      // Very small polygon offset — just enough to break the z-tie with
+      // the cyc backdrop at grazing angles. The previous -4/-4 was so
+      // aggressive it bled the shadow's dark gradient onto the bottom
+      // 1-5 cm of every vertical mesh (trunk base, avatar legs).
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
     }),
   );
   shadowMesh.rotation.x = -Math.PI / 2;
-  shadowMesh.position.y = 0.002;
+  // Sit just above the floor — enough to clear z-fight, low enough to not
+  // visibly overlap the bottom of standing geometry.
+  shadowMesh.position.y = 0.005;
   shadowMesh.renderOrder = 1;
   scene.add(shadowMesh);
 }
@@ -2409,14 +2411,15 @@ const BARK_STYLES = {
     normalStrength: 1.2,
     grain: 4,
   },
-  // Black / sweet cherry — smooth deep red-brown with characteristic
-  // horizontal lenticel bands ("rings"). Almost no vertical pattern.
+  // Yoshino / blossoming cherry — silvery grey-brown trunk with horizontal
+  // lenticel bands. Cool palette so it doesn't compete with the pink canopy;
+  // sweet/black cherry's mahogany would read as more pink under bounce light.
   cherry: {
     vertFreq: 0,   vertSharp: 0, vertWobble: 0, vertDepth: 0,
     horizFreq: 22, horizSharp: 8, horizAmp: 0.30,
     largeFreq: 2,  largeAmp: 0.22,
     microFreq: 16, microAmp: 0.03,
-    palette: [[56, 24, 16], [125, 65, 42], [180, 110, 78]],
+    palette: [[48, 42, 38], [108, 100, 92], [170, 160, 148]],
     normalStrength: 1.6,
     grain: 4,
   },
