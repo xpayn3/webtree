@@ -1495,20 +1495,18 @@ function buildTube(chainNodes, profile, taper, isScrubbing, displace, isBranch, 
   }
   {
     const twoPiLoc = Math.PI * 2;
-    // Mirror of main.js: snap the around-tube circumference UV to an integer
-    // multiple of (1/sv) so the seam vertex maps to the same texel as u=0.
+    // Snap the around-tube UV span ONCE per tube — every ring wraps the
+    // bark canvas the same integer tile count. Per-ring snapping caused
+    // horizontal banding wherever the tile count stepped along the radius.
     const sv = (typeof _svForUV === 'number' && _svForUV > 0) ? _svForUV : 0.5;
+    let maxR = 0;
+    for (let k = 0; k < chainRadii.length; k++) if (chainRadii[k] > maxR) maxR = chainRadii[k];
+    const tubeCircumMax = twoPiLoc * Math.max(0.002, maxR);
+    const tilesAround = Math.max(1, Math.round(tubeCircumMax * sv));
+    const seamCircum = tilesAround / sv;
     for (let i = 0; i <= tubular; i++) {
       const ti = i * invTubular;
       const sAlong = ti * polyLen;
-      const cfpU = ti * lastChainIdx;
-      const uI0 = Math.max(0, Math.min(lastChainIdx, Math.floor(cfpU)));
-      const uI1 = Math.min(lastChainIdx, uI0 + 1);
-      const uU = cfpU - uI0;
-      const rHere = Math.max(0.002, chainRadii[uI0] * (1 - uU) + chainRadii[uI1] * uU);
-      const circumHere = twoPiLoc * rHere;
-      const tilesAround = Math.max(1, Math.round(circumHere * sv));
-      const seamCircum = tilesAround / sv;
       for (let j = 0; j <= radial; j++) {
         const sAround = (j / radial) * seamCircum;
         const idx = (i * radial1 + j) * 2;

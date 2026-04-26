@@ -5532,34 +5532,28 @@ function tubeFromChain(chain) {
     if (uvAttr) {
       const uvArr = uvAttr.array;
       const twoPiLoc = Math.PI * 2;
-      // Snap the AROUND-tube UV so j=radial lands exactly on an integer
-      // tile boundary — i.e. the seam vertex's u.y is a whole-number
-      // multiple of (1 / barkTexScaleV). Without this snap, a partial-tile
-      // wrap (e.g. 1.32 tiles around a 0.42 m trunk) leaves a visible seam
-      // line where u=0 and u=circumHere don't align with the tilable
-      // bark canvas. Stretches each tile by a few percent at most.
+      // Snap the around-tube UV span ONCE per tube (using the max radius
+      // along the chain) so every ring wraps the bark canvas the same
+      // integer number of tiles. Per-ring snapping (the previous attempt)
+      // produced visible horizontal banding wherever a tile-count step
+      // landed (e.g. a 4-tile ring next to a 3-tile ring left a hard line).
+      // With a constant tile count, texture density varies smoothly along
+      // the tube (more stretch on the trunk base, less on twigs) and the
+      // seam vertex always lands on an integer texel boundary — clean wrap.
       const sv = P.barkTexScaleV ?? 0.5;
+      let maxR = 0;
+      for (let k = 0; k < chainRadii.length; k++) if (chainRadii[k] > maxR) maxR = chainRadii[k];
+      const tubeCircumMax = twoPiLoc * Math.max(0.002, maxR);
+      const tilesAround = Math.max(1, Math.round(tubeCircumMax * sv));
+      const seamCircum = tilesAround / sv; // CONSTANT for whole tube
       for (let i = 0; i <= tubular; i++) {
         const ti = i * invTubular;
         const sAlong = ti * curveLen;
-        // Local radius at this slice (taper-aware) — sample the per-chain-
-        // node radius interpolation so branches with internal taper get
-        // correct circumference, not just a linear r0→r1.
-        const cfpU = ti * lastChainIdx;
-        const uI0 = Math.max(0, Math.min(lastChainIdx, Math.floor(cfpU)));
-        const uI1 = Math.min(lastChainIdx, uI0 + 1);
-        const uU = cfpU - uI0;
-        const rHere = Math.max(0.002, chainRadii[uI0] * (1 - uU) + chainRadii[uI1] * uU);
-        const circumHere = twoPiLoc * rHere;
-        // Snap circumference span to nearest integer-tile multiple so the
-        // seam wraps the bark canvas at exactly an integer multiple.
-        const tilesAround = Math.max(1, Math.round(circumHere * sv));
-        const seamCircum = tilesAround / sv;
         for (let j = 0; j <= radial; j++) {
           const sAround = (j / radial) * seamCircum;
           const idx = (i * radial1 + j) * 2;
           uvArr[idx    ] = sAlong;   // uv.x = meters ALONG the tube
-          uvArr[idx + 1] = sAround;  // uv.y = SNAPPED meters AROUND the tube
+          uvArr[idx + 1] = sAround;  // uv.y = constant-tile UV AROUND
         }
       }
       uvAttr.needsUpdate = true;
