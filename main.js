@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r11';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r11';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r11';
-import { buildRootsGeometry } from './roots.js?v=r11';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r12';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r12';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r12';
+import { buildRootsGeometry } from './roots.js?v=r12';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -4128,12 +4128,17 @@ function buildTree(nodesOut) {
   let maxY = 0;
   const rootFlare = P.rootFlare;
   const flareH = 3.8;
+  // Bias factor halves the actual flare strength so default rootFlare=1
+  // gives a natural ~1.4× buttress instead of doubling the trunk base.
+  // Per-species rootFlare values were tuned with this softer effect in mind
+  // — bumping the slider to 2.0 reproduces the old behavior.
+  const FLARE_BIAS = 0.5;
   for (const n of nodes) {
     const y = n.pos.y;
     if (y < flareH) {
       const u = 1 - y / flareH;
       const eased = u * u * (3 - 2 * u);
-      n.radius *= 1 + rootFlare * eased;
+      n.radius *= 1 + rootFlare * eased * FLARE_BIAS;
     }
     if (y > maxY) maxY = y;
   }
@@ -14459,6 +14464,57 @@ new MutationObserver(() => enhanceAllSelects()).observe(document.body, { childLi
   });
   body.addEventListener('toggle', () => persistDebounced(), true);
   new MutationObserver(scan).observe(body, { childList: true, subtree: true });
+})();
+
+// --- First-time welcome + sidebar warm-up -------------------------------
+// Shown once per browser. A 1-line headline overlay tells the visitor
+// what the app is and how to orbit. Trunk card auto-expands so a fresh
+// landing isn't a wall of empty headers. Both run from a localStorage
+// flag so returning users see their normal collapsed-card state.
+(function initFirstTimeWelcome() {
+  const FLAG = 'webgpu-tree:welcomed';
+  let seen = false;
+  try { seen = localStorage.getItem(FLAG) === '1'; } catch {}
+  if (seen) return;
+
+  // 1. Auto-expand the Trunk card so the first-time visitor sees real
+  //    sliders the moment they look at the sidebar. Other cards stay
+  //    collapsed for a calm initial state.
+  const sbBody = document.getElementById('sidebar-body');
+  if (sbBody) {
+    for (const d of sbBody.querySelectorAll(':scope > details')) {
+      const label = d.querySelector(':scope > summary .sec-label');
+      if (label && label.textContent.trim() === 'Trunk') { d.open = true; break; }
+    }
+  }
+
+  // 2. Headline overlay — top centre of the canvas, fades in/out, click
+  //    to dismiss, auto-dismisses after 6 s. Marks the flag on dismiss
+  //    so it never shows again on this browser.
+  const canvasWrap = document.getElementById('canvas-wrap') || document.body;
+  const banner = document.createElement('div');
+  banner.id = 'welcome-banner';
+  banner.innerHTML = `
+    <div class="wb-title">Procedural tree generator</div>
+    <div class="wb-sub">Drag to orbit · scroll to zoom · pick a species in the sidebar</div>
+    <button type="button" class="wb-close" aria-label="Dismiss">×</button>
+  `;
+  canvasWrap.appendChild(banner);
+  // Trigger the show transition next frame so the initial opacity:0
+  // actually gets applied (no flash of fully-opaque banner).
+  requestAnimationFrame(() => banner.classList.add('show'));
+
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
+    try { localStorage.setItem(FLAG, '1'); } catch {}
+    banner.classList.remove('show');
+    setTimeout(() => banner.remove(), 600);
+  };
+  banner.querySelector('.wb-close').addEventListener('click', dismiss);
+  banner.addEventListener('click', dismiss);
+  setTimeout(dismiss, 6000);
 })();
 
 // --- Sidebar search -----------------------------------------------------

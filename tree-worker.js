@@ -864,12 +864,15 @@ function buildTreeWorker(state) {
   let maxY = 0;
   const rootFlare = P.rootFlare;
   const flareH = 3.8;
+  // Mirror of main.js FLARE_BIAS — softens the buttress so default 1.0
+  // doesn't double trunk base radius.
+  const FLARE_BIAS = 0.5;
   for (const n of nodes) {
     const y = n.pos.y;
     if (y < flareH) {
       const u = 1 - y / flareH;
       const eased = u * u * (3 - 2 * u);
-      n.radius *= 1 + rootFlare * eased;
+      n.radius *= 1 + rootFlare * eased * FLARE_BIAS;
     }
     if (y > maxY) maxY = y;
   }
