@@ -1451,7 +1451,7 @@ function _sendTubeBatch(workerIdx, chainsSer, profilePoints, taperPoints, isScru
     _workerPending.set(reqId, { resolve, workerIdx, timer });
     _treeWorkers[workerIdx].postMessage({
       type: 'build-tubes',
-      payload: { chains: chainsSer, profilePoints, taperPoints, isScrubbing: isScrubbingArg, displace, reqId },
+      payload: { chains: chainsSer, profilePoints, taperPoints, isScrubbing: isScrubbingArg, displace, reqId, barkTexScaleV: P.barkTexScaleV ?? 0.5 },
     });
   });
 }
@@ -5523,6 +5523,13 @@ function tubeFromChain(chain) {
     if (uvAttr) {
       const uvArr = uvAttr.array;
       const twoPiLoc = Math.PI * 2;
+      // Snap the AROUND-tube UV so j=radial lands exactly on an integer
+      // tile boundary — i.e. the seam vertex's u.y is a whole-number
+      // multiple of (1 / barkTexScaleV). Without this snap, a partial-tile
+      // wrap (e.g. 1.32 tiles around a 0.42 m trunk) leaves a visible seam
+      // line where u=0 and u=circumHere don't align with the tilable
+      // bark canvas. Stretches each tile by a few percent at most.
+      const sv = P.barkTexScaleV ?? 0.5;
       for (let i = 0; i <= tubular; i++) {
         const ti = i * invTubular;
         const sAlong = ti * curveLen;
@@ -5535,11 +5542,15 @@ function tubeFromChain(chain) {
         const uU = cfpU - uI0;
         const rHere = Math.max(0.002, chainRadii[uI0] * (1 - uU) + chainRadii[uI1] * uU);
         const circumHere = twoPiLoc * rHere;
+        // Snap circumference span to nearest integer-tile multiple so the
+        // seam wraps the bark canvas at exactly an integer multiple.
+        const tilesAround = Math.max(1, Math.round(circumHere * sv));
+        const seamCircum = tilesAround / sv;
         for (let j = 0; j <= radial; j++) {
-          const sAround = (j / radial) * circumHere;
+          const sAround = (j / radial) * seamCircum;
           const idx = (i * radial1 + j) * 2;
           uvArr[idx    ] = sAlong;   // uv.x = meters ALONG the tube
-          uvArr[idx + 1] = sAround;  // uv.y = meters AROUND the tube
+          uvArr[idx + 1] = sAround;  // uv.y = SNAPPED meters AROUND the tube
         }
       }
       uvAttr.needsUpdate = true;

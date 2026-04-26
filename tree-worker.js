@@ -1231,7 +1231,7 @@ function _buildRingFrames(pts, tubular, framesOut) {
   }
 }
 
-function buildTube(chainNodes, profile, taper, isScrubbing, displace, isBranch, parentRadius) {
+function buildTube(chainNodes, profile, taper, isScrubbing, displace, isBranch, parentRadius, _svForUV) {
   // Guard: chain needs ≥2 distinct points (for tangent + frame computation).
   if (!chainNodes || chainNodes.length < 2) return null;
   const pts = [new THREE.Vector3(chainNodes[0].x, chainNodes[0].y, chainNodes[0].z)];
@@ -1495,6 +1495,9 @@ function buildTube(chainNodes, profile, taper, isScrubbing, displace, isBranch, 
   }
   {
     const twoPiLoc = Math.PI * 2;
+    // Mirror of main.js: snap the around-tube circumference UV to an integer
+    // multiple of (1/sv) so the seam vertex maps to the same texel as u=0.
+    const sv = (typeof _svForUV === 'number' && _svForUV > 0) ? _svForUV : 0.5;
     for (let i = 0; i <= tubular; i++) {
       const ti = i * invTubular;
       const sAlong = ti * polyLen;
@@ -1504,8 +1507,10 @@ function buildTube(chainNodes, profile, taper, isScrubbing, displace, isBranch, 
       const uU = cfpU - uI0;
       const rHere = Math.max(0.002, chainRadii[uI0] * (1 - uU) + chainRadii[uI1] * uU);
       const circumHere = twoPiLoc * rHere;
+      const tilesAround = Math.max(1, Math.round(circumHere * sv));
+      const seamCircum = tilesAround / sv;
       for (let j = 0; j <= radial; j++) {
-        const sAround = (j / radial) * circumHere;
+        const sAround = (j / radial) * seamCircum;
         const idx = (i * radial1 + j) * 2;
         uvArr[idx    ] = sAlong;
         uvArr[idx + 1] = sAround;
@@ -1585,9 +1590,10 @@ self.onmessage = (e) => {
   if (!msg) return;
 
   if (msg.type === 'build-tubes') {
-    const { chains, profilePoints, taperPoints, isScrubbing, displace, reqId } = msg.payload;
+    const { chains, profilePoints, taperPoints, isScrubbing, displace, reqId, barkTexScaleV } = msg.payload;
     const profile = profilePoints ? new ProfileSampler(profilePoints) : null;
     const taper   = taperPoints   ? new SplineSampler(taperPoints)   : null;
+    const _svForUV = (typeof barkTexScaleV === 'number' && barkTexScaleV > 0) ? barkTexScaleV : 0.5;
 
     const tubes = [];
     const transferables = [];
@@ -1597,7 +1603,7 @@ self.onmessage = (e) => {
     for (const chain of chains) {
       let t = null;
       try {
-        t = buildTube(chain.nodes, profile, taper, isScrubbing, displace, chain.chainRoot, chain.parentRadius);
+        t = buildTube(chain.nodes, profile, taper, isScrubbing, displace, chain.chainRoot, chain.parentRadius, _svForUV);
       } catch (err) {
         t = null;
       }
