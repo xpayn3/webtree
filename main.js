@@ -148,22 +148,43 @@ controls.addEventListener('start', () => { reframeAnim = null; });
 // We require camera.y ≥ FLOOR_Y, so cos(θ) ≥ (FLOOR_Y − target.y) / dist,
 // which gives θ ≤ acos((FLOOR_Y − target.y) / dist).
 const ORBIT_FLOOR_Y = 0.05;
+// Safe defaults for the camera-state recovery path; chosen so the user
+// always lands on a sensible framing if anything ever NaN's the camera.
+const _CAM_FALLBACK_POS = new THREE.Vector3(18, 12, 18);
+const _CAM_FALLBACK_TGT = new THREE.Vector3(0, 7, 0);
+function _isFiniteVec3(v) {
+  return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+}
+// Belt-and-suspenders camera-state validator. Once per frame we sanity-
+// check camera.position and controls.target — if either has gone NaN
+// (impossible in normal flow, but a guard against future bugs / extreme
+// gestures), snap back to a safe orbit so the viewport never freezes.
+function _validateCameraState() {
+  if (!_isFiniteVec3(camera.position) || !_isFiniteVec3(controls.target)) {
+    camera.position.copy(_CAM_FALLBACK_POS);
+    controls.target.copy(_CAM_FALLBACK_TGT);
+    reframeAnim = null;
+  }
+}
 function updateOrbitFloorClamp() {
-  // Specialized modes (leaf creator, sculpt) drive their own controls and
-  // expect the original 0.49π behaviour — bail out so we don't fight them.
+  // Specialized modes (leaf creator) drive their own controls and expect
+  // the original behaviour — bail so we don't fight them.
   if (_leafCreatorActive) return;
+  _validateCameraState();
   const dy = controls.target.y - ORBIT_FLOOR_Y;
   const dist = camera.position.distanceTo(controls.target);
+  // dist NaN is caught by validator above; this guards the small-distance
+  // and target-at/below-floor cases.
   if (dist < 1e-3 || dy <= 0) {
-    // Camera target is at/below the floor — fall back to horizon clamp
-    // rather than computing acos of an out-of-range value.
     controls.maxPolarAngle = Math.PI * 0.5;
     return;
   }
   const cosLimit = Math.max(-1, Math.min(1, -dy / dist));
-  // Tiny epsilon so floating-point bounce doesn't poke the camera through
-  // the floor on the next frame.
-  controls.maxPolarAngle = Math.acos(cosLimit) - 0.001;
+  const angle = Math.acos(cosLimit) - 0.001;  // epsilon so we never sit exactly on the floor
+  // Final NaN guard — Math.acos of a finite clamped value can't NaN, but
+  // belt-and-suspenders so a future change to cosLimit can't lock the
+  // camera with maxPolarAngle = NaN.
+  controls.maxPolarAngle = Number.isFinite(angle) ? angle : Math.PI * 0.5;
 }
 
 // --- Orbit pivot re-target (3D-app-style) ------------------------------
@@ -14925,14 +14946,23 @@ async function animate() {
   if (hadFalling || landedDirty) leafInstFall.instanceMatrix.needsUpdate = true;
 
   if (reframeAnim) {
-    reframeAnim.t += dt;
-    const k = Math.min(1, reframeAnim.t / reframeAnim.duration);
-    // Ease-in-out cubic: slow start, fast middle, slow stop — gentler
-    // framing motion than a pure ease-out.
-    const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-    camera.position.lerpVectors(reframeAnim.fromCam, reframeAnim.toCam, e);
-    controls.target.lerpVectors(reframeAnim.fromTarget, reframeAnim.toTarget, e);
-    if (k >= 1) reframeAnim = null;
+    // Defensive: if any of the four endpoint vectors is corrupt, abort the
+    // reframe rather than lerp NaN into the live camera state. lerpVectors
+    // silently propagates NaN otherwise.
+    if (!_isFiniteVec3(reframeAnim.fromCam) || !_isFiniteVec3(reframeAnim.toCam) ||
+        !_isFiniteVec3(reframeAnim.fromTarget) || !_isFiniteVec3(reframeAnim.toTarget) ||
+        !(reframeAnim.duration > 0)) {
+      reframeAnim = null;
+    } else {
+      reframeAnim.t += dt;
+      const k = Math.min(1, reframeAnim.t / reframeAnim.duration);
+      // Ease-in-out cubic: slow start, fast middle, slow stop — gentler
+      // framing motion than a pure ease-out.
+      const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      camera.position.lerpVectors(reframeAnim.fromCam, reframeAnim.toCam, e);
+      controls.target.lerpVectors(reframeAnim.fromTarget, reframeAnim.toTarget, e);
+      if (k >= 1) reframeAnim = null;
+    }
   }
 
   // Auto-orbit — rotate the camera around its orbit target on the world Y
