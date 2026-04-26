@@ -8080,6 +8080,30 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   if (_paramLocks.has(p.key)) row.classList.add('locked');
   const track = document.createElement('div');
   track.className = 'scrubber-track';
+  // Photoshop-style colour swatch behind the fill — shows what the slider
+  // controls at a glance. The translucent fill (~6% white) lets the gradient
+  // read through. `hue` paints a full rainbow; `saturation` shows grey →
+  // saturated red; `brightness` / `lum` shows black → white.
+  if (p.swatch === 'hue') {
+    track.style.backgroundImage =
+      'linear-gradient(to right,' +
+      ' hsl(0,75%,50%) 0%,' +
+      ' hsl(60,75%,50%) 16.66%,' +
+      ' hsl(120,75%,50%) 33.33%,' +
+      ' hsl(180,75%,50%) 50%,' +
+      ' hsl(240,75%,50%) 66.66%,' +
+      ' hsl(300,75%,50%) 83.33%,' +
+      ' hsl(360,75%,50%) 100%)';
+    scrubber.classList.add('swatch-hue');
+  } else if (p.swatch === 'saturation') {
+    track.style.backgroundImage =
+      'linear-gradient(to right, hsl(0,0%,50%), hsl(0,80%,50%))';
+    scrubber.classList.add('swatch-color');
+  } else if (p.swatch === 'brightness' || p.swatch === 'lum') {
+    track.style.backgroundImage =
+      'linear-gradient(to right, #000, #fff)';
+    scrubber.classList.add('swatch-color');
+  }
   const fillEl = document.createElement('div');
   fillEl.className = 'scrubber-fill';
   track.appendChild(fillEl);

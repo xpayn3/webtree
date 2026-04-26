@@ -120,10 +120,10 @@ export const PARAM_SCHEMA = [
     { key: 'barkGrain',        label: 'Grain',          min: 0, max: 30,  step: 0.5,   default: 6,    live: true },
     { key: 'barkBumpStrength', label: 'Bump strength',  min: 0, max: 8,   step: 0.1,   default: 4.5,  live: true },
     // ── Color ──
-    { key: 'barkHue',        label: 'Hue',         min: 0,   max: 1,   step: 0.01, default: 0.08, live: true },
+    { key: 'barkHue',        label: 'Hue',         min: 0,   max: 1,   step: 0.01, default: 0.08, live: true, swatch: 'hue' },
     { key: 'barkTint',       label: 'Tint amount', min: 0,   max: 1,   step: 0.02, default: 0,    live: true },
-    { key: 'barkBrightness', label: 'Brightness',  min: 0.3, max: 2,   step: 0.02, default: 1.0,  live: true },
-    { key: 'barkSaturation', label: 'Saturation',  min: 0,   max: 2,   step: 0.02, default: 1.0,  live: true },
+    { key: 'barkBrightness', label: 'Brightness',  min: 0.3, max: 2,   step: 0.02, default: 1.0,  live: true, swatch: 'brightness' },
+    { key: 'barkSaturation', label: 'Saturation',  min: 0,   max: 2,   step: 0.02, default: 1.0,  live: true, swatch: 'saturation' },
     // ── Surface ──
     { key: 'barkRoughness',      label: 'Roughness',    min: 0.2, max: 1,   step: 0.02, default: 0.95, live: true },
     { key: 'barkNormalStrength', label: 'Normal scale', min: 0,   max: 2.5, step: 0.05, default: 1.0,  live: true },
@@ -134,8 +134,8 @@ export const PARAM_SCHEMA = [
     // ── Moss ──
     { key: 'mossAmount',    label: 'Moss amount',     min: 0,    max: 1,   step: 0.02, default: 0,    live: true },
     { key: 'mossThreshold', label: 'Moss coverage',   min: 0.1,  max: 0.9, step: 0.02, default: 0.4,  live: true },
-    { key: 'mossHue',       label: 'Moss hue',        min: 0,    max: 1,   step: 0.01, default: 0.3,  live: true },
-    { key: 'mossLum',       label: 'Moss brightness', min: 0.05, max: 0.6, step: 0.02, default: 0.25, live: true },
+    { key: 'mossHue',       label: 'Moss hue',        min: 0,    max: 1,   step: 0.01, default: 0.3,  live: true, swatch: 'hue' },
+    { key: 'mossLum',       label: 'Moss brightness', min: 0.05, max: 0.6, step: 0.02, default: 0.25, live: true, swatch: 'brightness' },
   ]},
   { group: 'Leaves', treeType: 'broadleaf', params: [
     // Quantity & placement.
@@ -180,7 +180,7 @@ export const PARAM_SCHEMA = [
     { key: 'leafRoughness',       label: 'Roughness',     min: 0,    max: 1,   step: 0.02, default: 0.65, live: true },
     { key: 'leafTransmission',    label: 'Transmission',  min: 0,    max: 1,   step: 0.02, default: 0.45, live: true },
     { key: 'leafThickness',       label: 'Thickness',     min: 0,    max: 2,   step: 0.05, default: 0.35, live: true },
-    { key: 'leafHueShift',        label: 'Hue shift',     min: -0.3, max: 0.3, step: 0.01, default: 0,    live: true },
+    { key: 'leafHueShift',        label: 'Hue shift',     min: -0.3, max: 0.3, step: 0.01, default: 0,    live: true, swatch: 'hue' },
     { key: 'leafBackMix',         label: 'Back mix',      min: 0,    max: 1,   step: 0.02, default: 0.35, live: true },
     // --- Advanced (hidden) — diminishing-return polish for hero shots ---
     { key: 'leafIOR',             label: 'IOR',           min: 1.0,  max: 2.0, step: 0.02, default: 1.35, live: true, hidden: true },
@@ -389,7 +389,7 @@ export const SPECIES = {
     // not a flame, not a perfect ball. Alternate phyllotaxis (spiral).
     // Heavy gravity sag because oak limbs are massive and horizontal.
     type: 'broadleaf', barkStyle: 'oak',
-    trunkHeight: 8, trunkScale: 1.15, tipRadius: 0.006, alloExp: 2.4, rootFlare: 0.55,
+    trunkHeight: 8, tipRadius: 0.006, rootFlare: 0.55,
     trunkJitter: 0.07,
     globalScale: 1.0,
     shape: 'free', baseSize: 0.28,
@@ -418,7 +418,7 @@ export const SPECIES = {
     // phyllotaxis (Acer genus). 4 orders, heavy ramification, gravity sag
     // for the slight tip droop real maples carry under leaf weight.
     type: 'broadleaf', barkStyle: 'oak',
-    trunkHeight: 9, trunkScale: 1.0, tipRadius: 0.005, alloExp: 2.3, rootFlare: 0.45,
+    trunkHeight: 9, tipRadius: 0.005, rootFlare: 0.45,
     trunkJitter: 0.06,
     globalScale: 1.0,
     shape: 'free', baseSize: 0.3,
@@ -453,7 +453,7 @@ export const SPECIES = {
     //   • L1 startPlacement=0.55 → bare lower trunk, dome rides high.
     //   • L1 apicalDominance=0.0, apicalContinue=0 → no central leader.
     type: 'broadleaf', barkStyle: 'cherry',
-    trunkHeight: 7.5, trunkScale: 1.3, tipRadius: 0.005, alloExp: 2.35, rootFlare: 0.4,
+    trunkHeight: 7.5, tipRadius: 0.005, rootFlare: 0.4,
     trunkJitter: 0.05,
     globalScale: 0.95,
     shape: 'spherical', baseSize: 0.7,
@@ -482,7 +482,7 @@ export const SPECIES = {
     // whips don't read like a rigid helix. trunkHeight lifted 7 → 8 so the
     // weeping whips don't scrape the floor.
     type: 'broadleaf', barkStyle: 'smooth',
-    trunkHeight: 8, trunkScale: 1.5, tipRadius: 0.005, alloExp: 2.25, rootFlare: 0.55,
+    trunkHeight: 8, tipRadius: 0.005, rootFlare: 0.55,
     trunkBow: 0.45, trunkLean: 0.05, trunkLeanDir: 220, trunkJitter: 0.07,
     globalScale: 1.1,
     shape: 'cylindrical', baseSize: 0.08,
@@ -513,7 +513,7 @@ export const SPECIES = {
     // tips. Alternate phyllotaxis. Keeps 4 orders because the fine drooping
     // whips are part of the silhouette.
     type: 'broadleaf', barkStyle: 'birch',
-    trunkHeight: 10, trunkScale: 1.1, tipRadius: 0.005, alloExp: 2.45, rootFlare: 0.25,
+    trunkHeight: 10, tipRadius: 0.005, rootFlare: 0.25,
     trunkJitter: 0.05,
     globalScale: 0.7,
     shape: 'tend-flame', baseSize: 0.18,
@@ -539,7 +539,7 @@ export const SPECIES = {
     // umbrella crown. Alternate phyllotaxis on bipinnate compound leaves.
     // trunkHeight 6 → 7 so the canopy sits clearly above the ground.
     type: 'broadleaf', barkStyle: 'oak',
-    trunkHeight: 7, trunkScale: 1.3, tipRadius: 0.006, alloExp: 2.3, rootFlare: 0.4,
+    trunkHeight: 7, tipRadius: 0.006, rootFlare: 0.4,
     trunkJitter: 0.05,
     globalScale: 0.9,
     shape: 'free', baseSize: 0.45,
@@ -572,7 +572,7 @@ export const SPECIES = {
     // wide irregular crown. trunkHeight 4.5 → 5 + baseSize 0.1 → 0.15 so
     // low branches clear the ground more reliably.
     type: 'broadleaf', barkStyle: 'cherry',
-    trunkHeight: 5, trunkScale: 1.8, tipRadius: 0.007, alloExp: 2.1, rootFlare: 0.55,
+    trunkHeight: 5, tipRadius: 0.007, rootFlare: 0.55,
     trunkJitter: 0.1,
     globalScale: 0.75,
     shape: 'spherical', baseSize: 0.15,
@@ -602,7 +602,7 @@ export const SPECIES = {
     // the very top. Alternate phyllotaxis on palmate compound leaves.
     // baseSize 0.6 keeps the famously clean trunk.
     type: 'broadleaf', barkStyle: 'oak',
-    trunkHeight: 6, trunkScale: 3.4, tipRadius: 0.012, alloExp: 2.25, rootFlare: 1.0,
+    trunkHeight: 6, tipRadius: 0.012, rootFlare: 1.0,
     trunkLean: 0.04, trunkLeanDir: 15, trunkJitter: 0.07,
     globalScale: 0.9,
     shape: 'free', baseSize: 0.65,
@@ -628,7 +628,7 @@ export const SPECIES = {
     // in a spiral. No secondary branching in real palms. trunkHeight lifted
     // so the frond crown is clearly above human eye-level.
     type: 'broadleaf', barkStyle: 'smooth',
-    trunkHeight: 11, trunkScale: 0.8, tipRadius: 0.05, alloExp: 2.6, rootFlare: 0.4,
+    trunkHeight: 11, tipRadius: 0.05, rootFlare: 0.4,
     trunkLean: 0.12, trunkLeanDir: 35, trunkBow: 0.3,
     globalScale: 0.85,
     leafShape: 'Lanceolate',
@@ -683,7 +683,7 @@ export const SPECIES = {
     // alternate phyllotaxis, narrow columnar crown, flat leafstalks that
     // flutter in wind.
     type: 'broadleaf', barkStyle: 'birch',
-    trunkHeight: 9, trunkScale: 0.85, tipRadius: 0.005, alloExp: 2.4, rootFlare: 0.25,
+    trunkHeight: 9, tipRadius: 0.005, rootFlare: 0.25,
     trunkJitter: 0.05,
     globalScale: 0.75,
     shape: 'cylindrical', baseSize: 0.4,
@@ -709,7 +709,7 @@ export const SPECIES = {
     // tend-flame silhouette = flame/teardrop: widest in lower third, pointed top.
     // Nyssa sylvatica — alternate phyllotaxis, oval leaves.
     type: 'broadleaf', barkStyle: 'oak',
-    trunkHeight: 12, trunkScale: 1.05, tipRadius: 0.006, alloExp: 2.45, rootFlare: 0.5,
+    trunkHeight: 12, tipRadius: 0.006, rootFlare: 0.5,
     trunkJitter: 0.06,
     globalScale: 0.85,
     shape: 'conical', baseSize: 0.25,
@@ -735,7 +735,7 @@ export const SPECIES = {
     // (oval + mitten + 3-lobed on the same tree). Irregular zigzag
     // branching, forky silhouette.
     type: 'broadleaf', barkStyle: 'oak',
-    trunkHeight: 8, trunkScale: 1.15, tipRadius: 0.006, alloExp: 2.3, rootFlare: 0.35,
+    trunkHeight: 8, tipRadius: 0.006, rootFlare: 0.35,
     trunkJitter: 0.08,
     globalScale: 1.0,
     shape: 'spherical', baseSize: 0.18,
@@ -759,7 +759,7 @@ export const SPECIES = {
     // (2-ranked alternate) phyllotaxis — approximated as alternate.
     // baseSize bumped so the low scaffold clears the ground.
     type: 'broadleaf', barkStyle: 'oak',
-    trunkHeight: 9, trunkScale: 1.3, tipRadius: 0.006, alloExp: 2.35, rootFlare: 0.45,
+    trunkHeight: 9, tipRadius: 0.006, rootFlare: 0.45,
     trunkJitter: 0.06,
     globalScale: 0.95,
     shape: 'spherical', baseSize: 0.2,
@@ -784,7 +784,7 @@ export const SPECIES = {
     // crown. Branches start high (clean bole), dense layered canopy, slight
     // weep at the very tips.
     type: 'broadleaf', barkStyle: 'smooth',
-    trunkHeight: 13, trunkScale: 1.1, tipRadius: 0.005, alloExp: 2.4, rootFlare: 0.4,
+    trunkHeight: 13, tipRadius: 0.005, rootFlare: 0.4,
     trunkJitter: 0.04,
     barkHue: -0.05, barkLum: 0.45, barkRoughness: 0.7, barkNormalStrength: 0.6,
     globalScale: 1.0,
@@ -810,7 +810,7 @@ export const SPECIES = {
     // Platanus × hispanica (London Plane) — broad spreading crown, palmate
     // leaves, mottled bark. Iconic city tree. Massive horizontal scaffolds.
     type: 'broadleaf',
-    trunkHeight: 14, trunkScale: 1.3, tipRadius: 0.006, alloExp: 2.45, rootFlare: 0.6,
+    trunkHeight: 14, tipRadius: 0.006, rootFlare: 0.6,
     trunkJitter: 0.06,
     barkHue: 0.05, barkLum: 0.55, barkRoughness: 0.7, barkNormalStrength: 0.9,
     barkTexScaleU: 1.8, barkTexScaleV: 2.2,
@@ -835,7 +835,7 @@ export const SPECIES = {
     // Ginkgo biloba — living fossil. Pyramidal when young, more spreading
     // with age. Distinctive fan-shaped leaves, brilliant golden autumn.
     type: 'broadleaf',
-    trunkHeight: 11, trunkScale: 1.05, tipRadius: 0.006, alloExp: 2.5, rootFlare: 0.4,
+    trunkHeight: 11, tipRadius: 0.006, rootFlare: 0.4,
     trunkJitter: 0.05,
     globalScale: 1.0,
     shape: 'tend-flame', baseSize: 0.25,
@@ -861,7 +861,7 @@ export const SPECIES = {
     // Branches sweep dramatically upward against the trunk. Iconic Tuscan
     // landscape and windbreak rows.
     type: 'broadleaf',
-    trunkHeight: 16, trunkScale: 0.85, tipRadius: 0.005, alloExp: 2.8, rootFlare: 0.25,
+    trunkHeight: 16, tipRadius: 0.005, rootFlare: 0.25,
     trunkJitter: 0.04,
     globalScale: 1.0,
     shape: 'cylindrical', baseSize: 0.05,
@@ -885,7 +885,7 @@ export const SPECIES = {
     // Acer palmatum — small ornamental, ~5m. Layered horizontal branches,
     // delicate dissected palmate leaves, brilliant red autumn.
     type: 'broadleaf',
-    trunkHeight: 4, trunkScale: 0.95, tipRadius: 0.004, alloExp: 2.2, rootFlare: 0.35,
+    trunkHeight: 4, tipRadius: 0.004, rootFlare: 0.35,
     trunkJitter: 0.08,
     globalScale: 0.6,
     shape: 'tend-flame', baseSize: 0.15,
@@ -913,7 +913,7 @@ export const SPECIES = {
     // long pendulous lance leaves, smooth peeling bark. Open silhouette
     // with most foliage at the ends of long branches.
     type: 'broadleaf',
-    trunkHeight: 17, trunkScale: 1.1, tipRadius: 0.006, alloExp: 2.55, rootFlare: 0.4,
+    trunkHeight: 17, tipRadius: 0.006, rootFlare: 0.4,
     trunkJitter: 0.05,
     barkHue: 0.02, barkLum: 0.5, barkRoughness: 0.55, barkNormalStrength: 0.5,
     barkTexScaleU: 1.5, barkTexScaleV: 2.5,
@@ -938,7 +938,7 @@ export const SPECIES = {
   },
   Pine: {
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 14, trunkScale: 1.25, tipRadius: 0.022, alloExp: 2.6, rootFlare: 0.5,
+    trunkHeight: 14, tipRadius: 0.022, rootFlare: 0.5,
     shape: 'conical', baseSize: 0.15,
     leafSize: 0.18, leafFacing: 0.65, leavesPerTip: 26, leafChainSteps: 5, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 8.5, pruneHeight: 12, pruneCenterY: 12,
@@ -954,7 +954,7 @@ export const SPECIES = {
   },
   Spruce: {
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 16, trunkScale: 1.15, tipRadius: 0.02, alloExp: 2.7, rootFlare: 0.4,
+    trunkHeight: 16, tipRadius: 0.02, rootFlare: 0.4,
     shape: 'conical', baseSize: 0.08,
     leafSize: 0.1, leafFacing: 0.8, leavesPerTip: 30, leafChainSteps: 5, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 5, pruneHeight: 14, pruneCenterY: 14.5,
@@ -970,7 +970,7 @@ export const SPECIES = {
   },
   Cedar: {
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 16, trunkScale: 1.35, tipRadius: 0.03, alloExp: 2.4, rootFlare: 0.7,
+    trunkHeight: 16, tipRadius: 0.03, rootFlare: 0.7,
     shape: 'conical', baseSize: 0.2,
     leafSize: 0.14, leafFacing: 0.45, leavesPerTip: 22, leafChainSteps: 4, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 8.5, pruneHeight: 9.5, pruneCenterY: 11.5,
@@ -987,7 +987,7 @@ export const SPECIES = {
   },
   Cypress: {
     type: 'conifer',
-    trunkHeight: 14, trunkScale: 0.95, tipRadius: 0.022, alloExp: 2.8, rootFlare: 0.35,
+    trunkHeight: 14, tipRadius: 0.022, rootFlare: 0.35,
     shape: 'cylindrical', baseSize: 0.05,
     leafSize: 0.08, leafFacing: 0.65, leavesPerTip: 28, leafChainSteps: 4, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 3.2, pruneHeight: 14, pruneCenterY: 11,
@@ -1004,7 +1004,7 @@ export const SPECIES = {
   // --- Weber-Penn conifers ------------------------------------------------
   Fir: {
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 18, trunkScale: 1.2, tipRadius: 0.02, alloExp: 2.8, rootFlare: 0.5,
+    trunkHeight: 18, tipRadius: 0.02, rootFlare: 0.5,
     shape: 'conical', baseSize: 0.08,
     leafSize: 0.12, leafFacing: 0.78, leavesPerTip: 28, leafChainSteps: 5, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 5.2, pruneHeight: 15, pruneCenterY: 15,
@@ -1020,7 +1020,7 @@ export const SPECIES = {
   },
   Larch: {
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 15, trunkScale: 1.1, tipRadius: 0.022, alloExp: 2.55, rootFlare: 0.45,
+    trunkHeight: 15, tipRadius: 0.022, rootFlare: 0.45,
     shape: 'conical', baseSize: 0.15,
     leafSize: 0.1, leafFacing: 0.4, leavesPerTip: 24, leafChainSteps: 4, season: 0.35,
     pruneMode: 'ellipsoid', pruneRadius: 6.5, pruneHeight: 12, pruneCenterY: 13,
@@ -1039,7 +1039,7 @@ export const SPECIES = {
     // Scots Pine: tall bare trunk with the whole crown at the top — the
     // classic "umbrella pine" silhouette.
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 15, trunkScale: 1.15, tipRadius: 0.022, alloExp: 2.6, rootFlare: 0.5,
+    trunkHeight: 15, tipRadius: 0.022, rootFlare: 0.5,
     shape: 'inverse', baseSize: 0.55,
     leafSize: 0.2, leafFacing: 0.5, leavesPerTip: 30, leafChainSteps: 5, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 8, pruneHeight: 6, pruneCenterY: 17,
@@ -1057,7 +1057,7 @@ export const SPECIES = {
     // Eastern Hemlock: graceful drooping conifer with soft silhouette —
     // tips of every branch droop noticeably.
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 16, trunkScale: 1.05, tipRadius: 0.02, alloExp: 2.65, rootFlare: 0.35,
+    trunkHeight: 16, tipRadius: 0.02, rootFlare: 0.35,
     shape: 'conical', baseSize: 0.1,
     leafSize: 0.1, leafFacing: 0.55, leavesPerTip: 28, leafChainSteps: 5, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 6, pruneHeight: 14, pruneCenterY: 14,
@@ -1074,7 +1074,7 @@ export const SPECIES = {
   Juniper: {
     // Juniper: short shrub-like conifer — dense rounded crown, tiny needles.
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 4, trunkScale: 0.8, tipRadius: 0.02, alloExp: 2.3, rootFlare: 0.4,
+    trunkHeight: 4, tipRadius: 0.02, rootFlare: 0.4,
     globalScale: 0.55,
     shape: 'spherical', baseSize: 0.05,
     leafSize: 0.07, leafFacing: 0.7, leavesPerTip: 24, leafChainSteps: 4, season: 0.2,
@@ -1093,7 +1093,7 @@ export const SPECIES = {
     // Coast Redwood / Sequoia: massive columnar tower. Thick trunk,
     // narrow crown, clean lower bole.
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 24, trunkScale: 1.9, tipRadius: 0.028, alloExp: 2.9, rootFlare: 0.75,
+    trunkHeight: 24, tipRadius: 0.028, rootFlare: 0.75,
     globalScale: 1.1,
     shape: 'cylindrical', baseSize: 0.3,
     leafSize: 0.08, leafFacing: 0.65, leavesPerTip: 26, leafChainSteps: 4, season: 0.2,
@@ -1112,7 +1112,7 @@ export const SPECIES = {
     // Monkey Puzzle tree: distinctive tiered horizontal branches with
     // short stubby twigs and dense spiky needles.
     type: 'conifer', barkStyle: 'pine',
-    trunkHeight: 16, trunkScale: 1.1, tipRadius: 0.03, alloExp: 2.4, rootFlare: 0.4,
+    trunkHeight: 16, tipRadius: 0.03, rootFlare: 0.4,
     shape: 'conical', baseSize: 0.25,
     leafSize: 0.13, leafFacing: 0.9, leavesPerTip: 40, leafChainSteps: 6, season: 0.2,
     pruneMode: 'ellipsoid', pruneRadius: 7, pruneHeight: 12, pruneCenterY: 13,
@@ -1528,4 +1528,4 @@ export const PARAM_DESCRIPTIONS = {
   swirl:            'Sideways swirl that rotates the wind heading over time',
   // Physics (additions)
   pinPower:         'How strongly leaves pin to the branch (used by foliage sim)',
-};
+};

@@ -2538,6 +2538,41 @@ body.bake-mode #axis-gizmo {
   background: rgba(128, 179, 255, 0.26);
   border-right: 2px solid var(--accent);
 }
+
+/* Colour-swatch scrubbers (hue / saturation / brightness): the gradient on
+   the track does the visual heavy lifting. Drop the white-wash fill and
+   keep just a right-edge indicator so position reads cleanly. */
+#sidebar .scrubber.swatch-hue,
+#sidebar .scrubber.swatch-color {
+  background: rgba(0, 0, 0, 0.25);  /* dark frame so light gradients still read */
+}
+#sidebar .scrubber.swatch-hue .scrubber-fill,
+#sidebar .scrubber.swatch-color .scrubber-fill {
+  background: transparent;
+  border-right: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+#sidebar .scrubber.swatch-hue:hover .scrubber-fill,
+#sidebar .scrubber.swatch-color:hover .scrubber-fill {
+  background: transparent;
+  border-right: 1px solid #fff;
+}
+#sidebar .scrubber.swatch-hue.dragging .scrubber-fill,
+#sidebar .scrubber.swatch-color.dragging .scrubber-fill {
+  background: transparent;
+  border-right: 2px solid #fff;
+}
+/* Subtle text shadow so the label/value stays legible over bright gradients */
+#sidebar .scrubber.swatch-hue .scrubber-overlay,
+#sidebar .scrubber.swatch-color .scrubber-overlay {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+#sidebar .scrubber.swatch-hue .name,
+#sidebar .scrubber.swatch-hue .val,
+#sidebar .scrubber.swatch-color .name,
+#sidebar .scrubber.swatch-color .val {
+  color: rgba(255, 255, 255, 0.92);
+}
 #sidebar .scrubber-overlay {
   position: absolute;
   inset: 0;
