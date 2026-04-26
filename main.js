@@ -8447,8 +8447,9 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   overlay.append(name, val);
   scrubber.appendChild(overlay);
 
-  const totalSteps = Math.max(1, Math.round((p.max - p.min) / p.step));
-  const defaultStep = (p.default - p.min) / p.step;
+  // Mutable so _setRange can adjust (e.g. species switch retunes leafSize).
+  let totalSteps = Math.max(1, Math.round((p.max - p.min) / p.step));
+  let defaultStep = (p.default - p.min) / p.step;
   const THRESHOLD = 6;
 
   // Continuous (float) step — gives a smooth fill bar and fine emitted values
@@ -8639,6 +8640,17 @@ function createSliderRow(p, getter, setter, onAfter, opts) {
   };
   scrubber._resetToDefault = () => { applyStep(defaultStep, true); };
   scrubber._isModified = isModified;
+  // Allow callers (e.g. applySpecies) to retune the slider range so the
+  // current value sits in a comfortable middle of the track instead of
+  // clipped against the left edge with millimeter precision.
+  scrubber._setRange = (newMin, newMax) => {
+    if (newMax <= newMin) return;
+    p.min = newMin; p.max = newMax;
+    totalSteps = Math.max(1, Math.round((p.max - p.min) / p.step));
+    defaultStep = (p.default - p.min) / p.step;
+    const currentVal = p.min + step * p.step; // remembered from previous range
+    applyStep((Math.max(p.min, Math.min(p.max, currentVal)) - p.min) / p.step, false);
+  };
 
 
   row.appendChild(scrubber);
@@ -12239,6 +12251,24 @@ function applySpecies(name) {
   applyBarkMaterial();
   applyLeafShape();
   _refreshLeafShapePanel?.();
+  // Retune size sliders so the active species sits in a comfortable middle
+  // of the track instead of jammed against the left edge of the absolute
+  // schema range. Range = current value × 3 (with a sane absolute floor),
+  // so a 0.07 leaf has a 0.02..0.21 slider, a 0.6 palm leaf has a
+  // 0.02..1.8 slider, etc.
+  const _retune = (key, baseFloor) => {
+    const el = sidebarBody?.querySelector(`.scrubber[data-pkey="${key}"]`);
+    if (el && typeof el._setRange === 'function') {
+      const v = P[key];
+      if (typeof v === 'number' && v > 0) {
+        const max = Math.max(baseFloor, v * 3);
+        el._setRange(0.005, max);
+      }
+    }
+  };
+  _retune('leafSize',     0.10);
+  _retune('leafSpread',   0.30);
+  _retune('leafMaxRadius', 0.10);
   // Collapse all sidebar cards on species change so the user starts from a
   // clean view of the new preset.
   const _sb = document.getElementById('sidebar-body');
