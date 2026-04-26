@@ -869,18 +869,18 @@ function _buildSculptChrome() {
     </div>
     <div class="sc-bar-tool">
       <button type="button" class="sc-tool sc-tool-point" title="Grab a single branch" data-tool="point">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 6 6"/><path d="M4 4l4.5 15.5L11 14l5.5-2.5L4 4z"/></svg>
+        ${iconSvg('mouse-pointer-2', 13)}
         <span>Point</span>
       </button>
       <button type="button" class="sc-tool sc-tool-brush" title="Brush-grab many joints with falloff ([/] to resize)" data-tool="brush">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+        ${iconSvg('circle-dot', 13)}
         <span>Brush</span>
       </button>
       <span class="sc-brush-radius mono"></span>
     </div>
     <div class="sc-bar-actions">
       <button type="button" class="sc-bar-btn sc-undo" title="Undo last edit (Ctrl+Z)">
-        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>
+        ${iconSvg('rotate-ccw', 12)}
         <span>Undo</span>
       </button>
       <button type="button" class="sc-bar-btn sc-discard">Discard</button>
@@ -1016,13 +1016,13 @@ function _buildSculptToolbar() {
     return s;
   };
 
-  // Icons reuse the lucide family already in the app for visual consistency.
-  const icoPoint = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 6 6"/><path d="M4 4l4.5 15.5L11 14l5.5-2.5L4 4z"/></svg>`;
-  const icoBrush = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>`;
-  const icoSkel  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M5 17A12 12 0 0 1 17 5"/></svg>`;
-  const icoWire  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`;
-  const icoLeaf  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg>`;
-  const icoUndo  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>`;
+  // Icons all sourced from the central Lucide registry (ICONS).
+  const icoPoint = iconSvg('mouse-pointer-2');
+  const icoBrush = iconSvg('circle-dot');
+  const icoSkel  = iconSvg('spline');
+  const icoWire  = iconSvg('box');
+  const icoLeaf  = iconSvg('leaf');
+  const icoUndo  = iconSvg('rotate-ccw');
 
   const btnPoint = mkBtn('Point — right-drag a single branch', icoPoint, () => setBrushMode(false));
   const btnBrush = mkBtn('Brush — right-drag many joints (right-click for settings)', icoBrush, () => setBrushMode(true));
@@ -7939,6 +7939,27 @@ const ICONS = {
   'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   'chevron-left':  '<polyline points="15 18 9 12 15 6"/>',
   'chevron-right': '<polyline points="9 18 15 12 9 6"/>',
+  'chevron-down':  '<path d="M6 9l6 6 6-6"/>',
+  'target':         '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  // Sculpt toolbar
+  'mouse-pointer-2':'<path d="m9 11 6 6"/><path d="M4 4l4.5 15.5L11 14l5.5-2.5L4 4z"/>',
+  'circle-dot':     '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>',
+  'rotate-ccw':     '<path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/>',
+  'rotate-cw':      '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
+  // Crown / leaf-creator toolbars
+  'crosshair':      '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
+  'dice-5':         '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="16" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/>',
+  'clipboard':      '<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>',
+  'clipboard-copy': '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  'eye':            '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  'eye-off':        '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>',
+  'move':           '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/>',
+  'grid':           '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  'sliders':        '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
+  'command':        '<path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>',
+  // Leaf-creator-only glyphs (Lucide-style composites).
+  'rotate-axis':    '<path d="M12 3v4"/><path d="M21 12a9 9 0 1 1-9-9"/><path d="m15 5 3 2-3 2"/>',
+  'wireframe':      '<path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14M3 5l18 14M21 5 3 19"/>',
 };
 
 function iconSvg(name, size = 14) {
@@ -8822,13 +8843,7 @@ buildParamGroup('Leaf Material');
   const advBtn = document.createElement('button');
   advBtn.type = 'button';
   advBtn.className = 'lc-open-btn';
-  advBtn.innerHTML = [
-    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',
-    '<path d="M12 2 C 7 7, 7 13, 12 22 C 17 13, 17 7, 12 2 Z"/>',
-    '<path d="M12 6 L12 22"/>',
-    '</svg>',
-    '<span>Open Advanced Leaf Creator</span>',
-  ].join('');
+  advBtn.innerHTML = iconSvg('leaf', 14) + '<span>Open Advanced Leaf Creator</span>';
   advBtn.addEventListener('click', () => {
     if (typeof openLeafCreator === 'function') openLeafCreator();
   });
@@ -9470,46 +9485,46 @@ function _buildLeafCreatorChrome() {
     </div>
     <div class="lc-bar-tools">
       <button type="button" class="lc-bar-btn" data-lc="rotate" title="Drag to rotate the leaf around its own axis">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M21 12a9 9 0 1 1-9-9"/><path d="m15 5 3 2-3 2"/></svg>
+        ${iconSvg('rotate-axis', 13)}
         <span>Rotate</span>
       </button>
       <button type="button" class="lc-bar-btn" data-lc="spin" title="Auto-rotate the leaf">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        ${iconSvg('rotate-cw', 13)}
         <span>Spin</span>
       </button>
       <button type="button" class="lc-bar-btn" data-lc="wind" title="Preview wind flutter">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h17a3 3 0 1 1-3 3"/><path d="M3 16h7"/></svg>
+        ${iconSvg('wind', 13)}
         <span>Wind</span>
       </button>
       <button type="button" class="lc-bar-btn" data-lc="wireframe" title="Show wireframe">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14M3 5l18 14M21 5 3 19"/></svg>
+        ${iconSvg('wireframe', 13)}
         <span>Wire</span>
       </button>
       <button type="button" class="lc-bar-btn" data-lc="recenter" title="Recenter camera on the leaf">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+        ${iconSvg('crosshair', 13)}
         <span>Recenter</span>
       </button>
       <span class="lc-bar-sep"></span>
       <button type="button" class="lc-bar-btn" data-lc="randomize" title="Randomize shape & material within sane bounds">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="16" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/></svg>
+        ${iconSvg('dice-5', 13)}
         <span>Randomize</span>
       </button>
       <button type="button" class="lc-bar-btn" data-lc="copy" title="Copy leaf settings to clipboard (JSON)">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        ${iconSvg('clipboard-copy', 13)}
         <span>Copy</span>
       </button>
       <button type="button" class="lc-bar-btn" data-lc="paste" title="Paste leaf settings from clipboard (JSON)">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/></svg>
+        ${iconSvg('clipboard', 13)}
         <span>Paste</span>
       </button>
       <button type="button" class="lc-bar-btn" data-lc="reset" title="Reset to the state when you opened the creator">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>
+        ${iconSvg('rotate-ccw', 13)}
         <span>Reset</span>
       </button>
     </div>
     <div class="lc-bar-right">
       <button type="button" class="lc-bar-close" data-lc="close" title="Close (Esc)">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        ${iconSvg('x', 14)}
         <span>Done</span>
       </button>
     </div>
@@ -9661,7 +9676,7 @@ function _buildLeafCreatorPanel() {
     h.innerHTML = `
       <span class="lc-section-icon">${icon || ''}</span>
       <span class="lc-section-title">${title}</span>
-      <span class="lc-section-caret"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+      <span class="lc-section-caret">${iconSvg('chevron-down', 12)}</span>
     `;
     const bodyEl = document.createElement('div');
     bodyEl.className = 'lc-section-body';
@@ -10713,7 +10728,7 @@ function applySpecies(name) {
       globalScale: 1.0, shape: 'tend-flame', baseSize: 0.25, rotation: 12,
       // Foliage
       leafShape: 'Maple',
-      leafSize: 0.18, leafSpread: 0.38, leafStemLen: 0.04,
+      leafSize: 0.18, leafSpread: 0.38, leafStemLen: 0,
       leavesPerTip: 38, leafChainSteps: 8, leavesStart: 0.15, season: 0.68,
       leafClusterSize: 3, leafClusterSpread: 0.55, leafMaxRadius: 0.14,
       leafPhyllotaxis: 'spiral', leafTilt: 0.3, leafColorVar: 0.12,
@@ -11857,18 +11872,11 @@ function _buildLODDrawer() {
   drawer.innerHTML = `
     <header class="lod-drawer-head">
       <div class="lod-drawer-title">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-          <polyline points="2 17 12 22 22 17"/>
-          <polyline points="2 12 12 17 22 12"/>
-        </svg>
+        ${iconSvg('layers', 15)}
         <span>LOD editor</span>
         <span class="lod-drawer-base mono"></span>
         <button type="button" class="lod-drawer-hide0 lod-mini-btn" title="Hide / show the original LOD0 in the scene">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
+          ${iconSvg('eye', 12)}
         </button>
       </div>
       <button class="lod-drawer-close" type="button" aria-label="Close">✕</button>
@@ -11945,8 +11953,8 @@ function _buildLODDrawer() {
       vis.className = 'lod-mini-btn' + (isActive ? ' on' : '');
       vis.title = isActive ? 'Hide this LOD from the scene' : 'Show this LOD in the scene';
       vis.innerHTML = isActive
-        ? `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`
-        : `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`;
+        ? iconSvg('eye', 12)
+        : iconSvg('eye-off', 12);
       vis.addEventListener('click', () => toggleLODPreview(slot.id));
 
       const rm = document.createElement('button');
@@ -12063,7 +12071,7 @@ function _buildLODDrawer() {
       rebuildBtn.title = isActive
         ? 'Re-run simplification on this LOD with current settings'
         : 'Build and show this LOD now';
-      rebuildBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg><span>Rebuild</span>`;
+      rebuildBtn.innerHTML = iconSvg('refresh-cw', 12) + '<span>Rebuild</span>';
       rebuildBtn.addEventListener('click', () => {
         if (_lodPreviewMeshes.has(slot.id)) rebuildLODPreview(slot.id);
         else _addLODPreview(slot, /*reframe=*/ true);

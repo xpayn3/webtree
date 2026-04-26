@@ -142,7 +142,7 @@ export const PARAM_SCHEMA = [
   // material / colour controls (matches how SpeedTree and The Grove split
   // them in their UI).
   { group: 'Stems', treeType: 'broadleaf', params: [
-    { key: 'leafStemLen',         label: 'Length',         min: 0,    max: 0.5, step: 0.01, default: 0.05 },
+    { key: 'leafStemLen',         label: 'Length',         min: 0,    max: 0.5, step: 0.01, default: 0 },
     { key: 'leafStemAngle',       label: 'Forward lean',   min: 0,    max: 1,   step: 0.02, default: 0.3 },
     { key: 'leafStemThick',       label: 'Thickness',      min: 0.3,  max: 3,   step: 0.05, default: 1.0 },
   ]},
@@ -348,12 +348,15 @@ export const SPECIES = {
     globalScale: 1.0,
     shape: 'free', baseSize: 0.28,
     leafShape: 'Oak',
-    leafSize: 0.15, leafSpread: 0.45, leafStemLen: 0.06, leafStemAngle: 0.35, leafTilt: 0.15,
+    leafSize: 0.15, leafSpread: 0.45, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.15,
     leavesPerTip: 28, leafChainSteps: 9, leavesStart: 0.05, season: 0.45,
     leafClusterSize: 3, leafClusterSpread: 0.6, leafMaxRadius: 0.18,
     leafPhyllotaxis: 'alternate',
     gravityStrength: 0.55, gravityStiffness: 0.55,
-    pruneMode: 'ellipsoid', pruneRadius: 7.0, pruneHeight: 5.0, pruneCenterY: 7.0,
+    // Crown shape comes from densityPoints / lengthPoints / apicalDominance
+    // ramps — hard ellipsoid envelope was clipping mid-arc against L1 angle 1.25
+    // + curveAmount 0.45.
+    pruneMode: 'off',
     levels: [
       withLevel({ children: 12, lenRatio: 0.68, angle: 1.25, angleVar: 0.28, rollVar: 0.95, startPlacement: 0.3, endPlacement: 1, apicalDominance: 0.05, angleDecline: 0.25, distortion: 0.32, distortionType: 'perlin', distortionFreq: 2.0, curveMode: 'sCurve', curveAmount: 0.45, curveBack: -0.35, segSplits: 0.3, splitAngle: 0.4, susceptibility: 1.3, gravitropism: 0.015, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.8], lengthPoints: [0.9, 1.0, 1.0, 1.0, 0.85], randomnessPoints: [0.5, 0.8, 1.1, 1.4, 1.7] }),
       withLevel({ children: 10, lenRatio: 0.68, angle: 0.85, angleVar: 0.25, rollVar: 0.9, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.08, distortion: 0.28, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.4, curveBack: -0.35, segSplits: 0.22, splitAngle: 0.35, gravitropism: 0.03, susceptibility: 1.5, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.8], lengthPoints: [0.9, 1.0, 1.0, 1.0, 0.85], randomnessPoints: [0.6, 0.9, 1.2, 1.5, 1.8] }),
@@ -374,12 +377,14 @@ export const SPECIES = {
     globalScale: 1.0,
     shape: 'free', baseSize: 0.3,
     leafShape: 'Maple',
-    leafSize: 0.12, leafSpread: 0.4, leafStemLen: 0.05, leafStemAngle: 0.4, leafTilt: 0.12,
+    leafSize: 0.12, leafSpread: 0.4, leafStemLen: 0, leafStemAngle: 0.4, leafTilt: 0.12,
     leavesPerTip: 26, leafChainSteps: 9, leavesStart: 0.05, season: 0.78,
     leafClusterSize: 3, leafClusterSpread: 0.6, leafMaxRadius: 0.14,
     leafPhyllotaxis: 'opposite',
     gravityStrength: 0.25, gravityStiffness: 1.0,
-    pruneMode: 'ellipsoid', pruneRadius: 5.5, pruneHeight: 5.0, pruneCenterY: 7.5,
+    // Decussate cage shapes itself — ellipsoid envelope was reading as a
+    // clipped sphere instead of the natural Maple silhouette.
+    pruneMode: 'off',
     levels: [
       withLevel({ children: 14, lenRatio: 0.62, angle: 1.0, angleVar: 0.15, rollVar: 0.55, phyllotaxis: 'decussate', startPlacement: 0.3, endPlacement: 1, apicalDominance: 0.05, angleDecline: 0.2, distortion: 0.22, distortionType: 'perlin', distortionFreq: 2.2, curveMode: 'sCurve', curveAmount: 0.25, curveBack: -0.15, segSplits: 0.3, splitAngle: 0.35, susceptibility: 1.2, gravitropism: 0.01, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85], lengthPoints: [0.85, 1.0, 1.0, 1.0, 0.85], randomnessPoints: [0.4, 0.7, 1.0, 1.2, 1.4] }),
       withLevel({ children: 11, lenRatio: 0.65, angle: 0.8, angleVar: 0.18, rollVar: 0.5, phyllotaxis: 'decussate', startPlacement: 0.15, endPlacement: 1, apicalDominance: 0.06, distortion: 0.22, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.22, curveBack: -0.15, segSplits: 0.22, splitAngle: 0.32, gravitropism: 0.015, susceptibility: 1.3, densityPoints: [0.85, 1.0, 1.0, 0.95, 0.85], lengthPoints: [0.9, 1.0, 1.0, 1.0, 0.9], randomnessPoints: [0.5, 0.8, 1.1, 1.3, 1.5] }),
@@ -389,25 +394,38 @@ export const SPECIES = {
     ],
   },
   Cherry: {
-    // Prunus: wide spreading crown on a short trunk, alternate phyllotaxis.
-    // Flowers bloom before leaves — season 0.05 keeps that "pink cloud" read.
-    // 4 orders (was 5). Trunk bumped 6 → 7 so the crown clears the floor.
+    // Prunus: ornamental cherry with a vase-form Y silhouette. The trunk
+    // ends in a small cluster of co-dominant primaries that spread upward
+    // and outward — that's the classic "Y at top" look. Flowers bloom
+    // before leaves (season 0.05 = pink cloud).
+    //
+    // Key levers for the Y read:
+    //   • L1 children=3, lenRatio=0.9 → few but long primaries.
+    //   • L1 angle=0.5, angleDecline=-0.4 → primaries near-vertical at tip.
+    //   • L1 startPlacement=0.6, densityPoints heavy at top → bare trunk
+    //     below, primaries cluster at the apex.
+    //   • L1 apicalDominance=0.0 → don't kill the side primaries.
+    //   • L1 apicalContinue=0 → no central leader overriding the fork.
+    //   • Sparse children at deeper levels keep the silhouette readable.
     type: 'broadleaf',
-    trunkHeight: 7, trunkScale: 1.25, tipRadius: 0.005, alloExp: 2.35, rootFlare: 0.35,
-    trunkJitter: 0.06,
-    globalScale: 0.9,
-    shape: 'free', baseSize: 0.2,
+    trunkHeight: 8.5, trunkScale: 1.3, tipRadius: 0.005, alloExp: 2.35, rootFlare: 0.4,
+    trunkJitter: 0.05,
+    globalScale: 0.95,
+    shape: 'free', baseSize: 0.55,
     leafShape: 'Oval',
-    leafSize: 0.1, leafSpread: 0.35, leafStemLen: 0.05, leafStemAngle: 0.35, leafTilt: 0.15,
+    leafSize: 0.1, leafSpread: 0.35, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.15,
     leavesPerTip: 18, leafChainSteps: 6, leavesStart: 0, season: 0.05,
     leafClusterSize: 4, leafClusterSpread: 0.65,
     leafPhyllotaxis: 'alternate',
     pruneMode: 'off',
     levels: [
-      withLevel({ children: 7, lenRatio: 0.7, angle: 1.1, angleVar: 0.25, rollVar: 0.8, startPlacement: 0.25, endPlacement: 1, apicalDominance: 0.12, angleDecline: -0.15, distortion: 0.26, distortionType: 'perlin', distortionFreq: 2.4, curveMode: 'sCurve', curveAmount: 0.45, curveBack: -0.25, segSplits: 0.2, splitAngle: 0.3, susceptibility: 1.6, gravitropism: 0.02, densityPoints: [0.5, 0.9, 1, 1, 0.85] }),
-      withLevel({ children: 6, lenRatio: 0.72, angle: 0.85, angleVar: 0.22, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.08, distortion: 0.24, distortionType: 'perlin', distortionFreq: 2.8, curveMode: 'sCurve', curveAmount: 0.35, curveBack: -0.3, segSplits: 0.1, splitAngle: 0.3, gravitropism: 0.025, susceptibility: 1.5, densityPoints: [0.5, 0.9, 1, 0.95, 0.7] }),
-      withLevel({ children: 5, lenRatio: 0.62, angle: 0.65, startPlacement: 0.25, endPlacement: 1, distortion: 0.22, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.04, densityPoints: [0.5, 0.85, 1, 1, 0.75] }),
-      // L4 twigs: drooping, wiggly.
+      // L1 — the Y. Three long primaries clustered near the trunk apex,
+      // angled out then bending up via curveBack. Density curve hands them
+      // entirely to the top of the trunk.
+      withLevel({ children: 3, lenRatio: 0.9, angle: 0.5, angleVar: 0.18, rollVar: 0.5, startPlacement: 0.6, endPlacement: 1, apicalDominance: 0, apicalContinue: 0, angleDecline: -0.4, distortion: 0.18, distortionType: 'perlin', distortionFreq: 2.0, curveMode: 'backCurve', curveAmount: 0.35, curveBack: -0.6, segSplits: 0, susceptibility: 1.4, gravitropism: -0.05, phototropism: 0.05, densityPoints: [0, 0.1, 0.5, 1, 1], lengthPoints: [0.95, 1, 1, 0.95, 0.85] }),
+      // L2 — secondary scaffold off each primary. Spreading crown fan.
+      withLevel({ children: 6, lenRatio: 0.62, angle: 0.95, angleVar: 0.25, startPlacement: 0.25, endPlacement: 1, apicalDominance: 0.1, distortion: 0.24, distortionType: 'perlin', distortionFreq: 2.6, curveMode: 'sCurve', curveAmount: 0.35, curveBack: -0.2, segSplits: 0.15, splitAngle: 0.35, gravitropism: 0.03, susceptibility: 1.5, densityPoints: [0.4, 0.85, 1, 1, 0.8] }),
+      withLevel({ children: 5, lenRatio: 0.55, angle: 0.7, startPlacement: 0.25, endPlacement: 1, distortion: 0.22, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.05, densityPoints: [0.5, 0.85, 1, 1, 0.75] }),
       withLevel({ children: 4, lenRatio: 0.42, angle: 0.5, startPlacement: 0.3, endPlacement: 1, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3.4, stochastic: 0.3, curveMode: 'backCurve', curveAmount: 0.3, gravitropism: 0.16, densityPoints: [0.5, 0.85, 1, 1, 0.8] }),
     ],
   },
@@ -422,19 +440,25 @@ export const SPECIES = {
     globalScale: 1.1,
     shape: 'cylindrical', baseSize: 0.08,
     leafShape: 'Willow',
-    leafSize: 0.2, leafDroop: 0.95, leafFacing: 0.3, leafStemLen: 0.04, leafStemAngle: 0.25, leafSpread: 0.4,
+    leafSize: 0.2, leafDroop: 0.95, leafFacing: 0.3, leafStemLen: 0, leafStemAngle: 0.25, leafSpread: 0.4,
     leavesPerTip: 20, leafChainSteps: 12, leavesStart: 0.1,
     leafMaxRadius: 0.05, leafPhyllotaxis: 'alternate',
     leafClusterSize: 3, leafClusterSpread: 0.3,
     pruneMode: 'off', season: 0.35,
+    // Real willow droops at the joint, not uniformly along each whip.
+    // gravityStrength gives the post-build sag pose (heavy whips rotate
+    // their parent subtree); per-step gravitropism kept lower so the whips
+    // themselves curve organically instead of cork-screwing.
+    gravityStrength: 1.2, gravityStiffness: 0.3,
     levels: [
       // Weber-Penn L1: Curve 0, CurveBack 20, SegSplits 0.1
       withLevel({ children: 6, lenRatio: 0.55, angle: 0.85, angleVar: 0.18, rollVar: 0.7, startPlacement: 0.35, endPlacement: 1, phototropism: 0.04, gravitropism: 0.015, susceptibility: 1.2, curveMode: 'sCurve', curveAmount: 0.4, curveBack: 0.2, segSplits: 0.1, splitAngle: 0.05, distortion: 0.1, densityPoints: [0.4, 0.8, 1, 1, 0.9], lengthPoints: [0.7, 0.95, 1.05, 1.0, 0.8] }),
       withLevel({ children: 5, lenRatio: 0.8, angle: 0.55, rollVar: 0.7, startPlacement: 0.2, endPlacement: 1, gravitropism: 0.05, susceptibility: 2.0, curveMode: 'backCurve', curveAmount: 0.75, curveBack: 0.8, segSplits: 0.2, splitAngle: 0.5, distortion: 0.08, densityPoints: [0.4, 0.85, 1, 0.95, 0.7], lengthPoints: [0.8, 1.0, 1.05, 1.0, 0.85] }),
       // Iconic weeping whips — uniformly long at all parent positions
-      // (base-heavy taper would kill the drape effect).
-      withLevel({ children: 4, lenRatio: 0.95, angle: 0.28, startPlacement: 0.25, endPlacement: 1, gravitropism: 0.14, susceptibility: 3.2, curveMode: 'backCurve', curveAmount: 1.15, stochastic: 0.1, densityPoints: [0.5, 0.85, 1, 0.95, 0.7], lengthPoints: [0.95, 1.0, 1.05, 1.05, 0.95] }),
-      withLevel({ children: 3, lenRatio: 0.85, angle: 0.22, startPlacement: 0.3, endPlacement: 1, gravitropism: 0.18, susceptibility: 3.5, curveMode: 'backCurve', curveAmount: 1.2, stochastic: 0.14, densityPoints: [0.5, 0.9, 1, 1, 0.8], lengthPoints: [0.95, 1.0, 1.05, 1.05, 0.95] }),
+      // (base-heavy taper would kill the drape effect). Halved gravitropism
+      // since gravityStrength now does the joint-level sag.
+      withLevel({ children: 4, lenRatio: 0.95, angle: 0.28, startPlacement: 0.25, endPlacement: 1, gravitropism: 0.07, susceptibility: 3.2, curveMode: 'backCurve', curveAmount: 1.15, stochastic: 0.1, densityPoints: [0.5, 0.85, 1, 0.95, 0.7], lengthPoints: [0.95, 1.0, 1.05, 1.05, 0.95] }),
+      withLevel({ children: 3, lenRatio: 0.85, angle: 0.22, startPlacement: 0.3, endPlacement: 1, gravitropism: 0.09, susceptibility: 3.5, curveMode: 'backCurve', curveAmount: 1.2, stochastic: 0.14, densityPoints: [0.5, 0.9, 1, 1, 0.8], lengthPoints: [0.95, 1.0, 1.05, 1.05, 0.95] }),
     ],
   },
   Birch: {
@@ -448,7 +472,7 @@ export const SPECIES = {
     shape: 'tend-flame', baseSize: 0.18,
     barkHue: 0.12, barkTint: 0.68,
     leafShape: 'Birch',
-    leafSize: 0.07, leafSpread: 0.3, leafStemLen: 0.04, leafStemAngle: 0.3, leafTilt: 0.2,
+    leafSize: 0.07, leafSpread: 0.3, leafStemLen: 0, leafStemAngle: 0.3, leafTilt: 0.2,
     leavesPerTip: 14, leafChainSteps: 6, leavesStart: 0.1, season: 0.25,
     leafClusterSize: 3, leafClusterSpread: 0.55,
     leafPhyllotaxis: 'alternate',
@@ -473,7 +497,7 @@ export const SPECIES = {
     globalScale: 0.9,
     shape: 'free', baseSize: 0.45,
     leafShape: 'Lanceolate',
-    leafSize: 0.08, leafSpread: 0.3, leafStemLen: 0.03, leafStemAngle: 0.5, leafTilt: 0.18,
+    leafSize: 0.08, leafSpread: 0.3, leafStemLen: 0, leafStemAngle: 0.5, leafTilt: 0.18,
     leavesPerTip: 22, leafChainSteps: 6, leavesStart: 0.3, season: 0.5,
     leafClusterSize: 5, leafClusterSpread: 0.7,
     leafPhyllotaxis: 'alternate',
@@ -502,7 +526,7 @@ export const SPECIES = {
     globalScale: 0.75,
     shape: 'spherical', baseSize: 0.15,
     leafShape: 'Lanceolate',
-    leafSize: 0.09, leafFacing: 0.2, leafSpread: 0.28, leafStemLen: 0.03, leafStemAngle: 0.35, leafTilt: 0.1,
+    leafSize: 0.09, leafFacing: 0.2, leafSpread: 0.28, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.1,
     leavesPerTip: 14, leafChainSteps: 6, leavesStart: 0.1, season: 0.28,
     leafClusterSize: 4, leafClusterSpread: 0.6,
     leafPhyllotaxis: 'opposite',
@@ -532,7 +556,7 @@ export const SPECIES = {
     globalScale: 0.9,
     shape: 'free', baseSize: 0.65,
     leafShape: 'Fan',
-    leafSize: 0.1, leafSpread: 0.3, leafStemLen: 0.04, leafStemAngle: 0.3, leafTilt: 0.1,
+    leafSize: 0.1, leafSpread: 0.3, leafStemLen: 0, leafStemAngle: 0.3, leafTilt: 0.1,
     leavesPerTip: 12, leafChainSteps: 5, leavesStart: 0.5, season: 0.5,
     leafClusterSize: 5, leafClusterSpread: 0.65,
     leafPhyllotaxis: 'alternate',
@@ -557,7 +581,7 @@ export const SPECIES = {
     trunkLean: 0.12, trunkLeanDir: 35, trunkBow: 0.3,
     globalScale: 0.85,
     leafShape: 'Lanceolate',
-    leafSize: 0.45, leafDroop: 0.7, leafFacing: 0.2, leafStemLen: 0.15, leafStemAngle: 0.15,
+    leafSize: 0.45, leafDroop: 0.7, leafFacing: 0.2, leafStemLen: 0, leafStemAngle: 0.15,
     leavesPerTip: 16, leafChainSteps: 6, leavesStart: 0.85, season: 0.2,
     leafClusterSize: 3, leafClusterSpread: 0.5,
     leafPhyllotaxis: 'spiral',
@@ -584,11 +608,13 @@ export const SPECIES = {
     globalScale: 0.75,
     shape: 'cylindrical', baseSize: 0.4,
     leafShape: 'Heart',
-    leafSize: 0.07, leafSpread: 0.3, leafStemLen: 0.05, leafStemAngle: 0.4, leafTilt: 0.25,
+    leafSize: 0.07, leafSpread: 0.3, leafStemLen: 0, leafStemAngle: 0.4, leafTilt: 0.25,
     leavesPerTip: 18, leafChainSteps: 6, leavesStart: 0.3, season: 0.55,
     leafClusterSize: 3, leafClusterSpread: 0.45, leafMaxRadius: 0.06,
     leafPhyllotaxis: 'alternate',
-    pruneMode: 'ellipsoid', pruneRadius: 4.5, pruneHeight: 7, pruneCenterY: 11,
+    // Narrow columnar Aspen shape comes from cylindrical 'shape' + density
+    // ramps; hard envelope was double-clipping.
+    pruneMode: 'off',
     levels: [
       withLevel({ children: 8, lenRatio: 0.48, angle: 1.05, angleVar: 0.35, rollVar: 0.85, startPlacement: 0.4, endPlacement: 1, apicalDominance: 0.2, distortion: 0.26, distortionType: 'perlin', distortionFreq: 3, curveMode: 'backCurve', curveAmount: 0.2, segSplits: 0.5, splitAngle: 0.3, susceptibility: 1.2, densityPoints: [0.3, 0.75, 1, 1, 0.9] }),
       withLevel({ children: 6, lenRatio: 0.58, angle: 0.78, angleVar: 0.3, startPlacement: 0.2, endPlacement: 1, apicalDominance: 0.15, distortion: 0.24, distortionType: 'perlin', distortionFreq: 3.2, stochastic: 0.22, curveMode: 'backCurve', curveAmount: 0.7, gravitropism: 0.015, densityPoints: [0.45, 0.85, 1, 0.95, 0.7] }),
@@ -608,7 +634,7 @@ export const SPECIES = {
     globalScale: 0.85,
     shape: 'conical', baseSize: 0.25,
     leafShape: 'Oval',
-    leafSize: 0.15, leafSpread: 0.4, leafStemLen: 0.05, leafStemAngle: 0.35, leafTilt: 0.15,
+    leafSize: 0.15, leafSpread: 0.4, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.15,
     leavesPerTip: 22, leafChainSteps: 6, leavesStart: 0.1, season: 0.88,
     leafClusterSize: 4, leafClusterSpread: 0.65, leafMaxRadius: 0.1,
     leafPhyllotaxis: 'alternate',
@@ -634,7 +660,7 @@ export const SPECIES = {
     globalScale: 1.0,
     shape: 'spherical', baseSize: 0.18,
     leafShape: 'Fan',
-    leafSize: 0.15, leafSpread: 0.4, leafStemLen: 0.06, leafStemAngle: 0.4, leafTilt: 0.2,
+    leafSize: 0.15, leafSpread: 0.4, leafStemLen: 0, leafStemAngle: 0.4, leafTilt: 0.2,
     leavesPerTip: 12, leafChainSteps: 6, leavesStart: 0.15, season: 0.82,
     leafClusterSize: 3, leafClusterSpread: 0.5, leafMaxRadius: 0.08,
     leafPhyllotaxis: 'alternate',
@@ -658,7 +684,7 @@ export const SPECIES = {
     globalScale: 0.95,
     shape: 'spherical', baseSize: 0.2,
     leafShape: 'Heart',
-    leafSize: 0.14, leafSpread: 0.4, leafStemLen: 0.05, leafStemAngle: 0.35, leafTilt: 0.15,
+    leafSize: 0.14, leafSpread: 0.4, leafStemLen: 0, leafStemAngle: 0.35, leafTilt: 0.15,
     leavesPerTip: 14, leafChainSteps: 6, leavesStart: 0.1, season: 0.5,
     leafClusterSize: 4, leafClusterSpread: 0.65, leafMaxRadius: 0.12,
     leafPhyllotaxis: 'alternate',
