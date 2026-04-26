@@ -623,7 +623,15 @@ export const SPECIES = {
       // real palms. Every frond must be full length (default base-heavy
       // taper would squash the crown into a tiny tuft because all fronds
       // spawn in the narrow 96-100% zone).
-      withLevel({ children: 14, lenRatio: 0.55, angle: 0.95, angleVar: 0.08, phyllotaxis: 'spiral', startPlacement: 0.96, endPlacement: 1, gravitropism: 0.07, susceptibility: 2.8, curveMode: 'backCurve', curveAmount: 0.95, distortion: 0.04, rollStart: 0.3, lengthPoints: [1, 1, 1, 1, 1], densityPoints: [1, 1, 1, 1, 1] }),
+      // - rollVar nearly 0 + angleVar low so fronds space evenly around
+      //   360° and all point out at the same pitch (no irregular bunch).
+      // - lenRatio cranked: real fronds are 4-6 m long; the previous 0.55
+      //   was barely wider than the trunk crown.
+      // - angle 1.15 rad (~66°) lifts fronds above horizontal at the base;
+      //   curveAmount 1.05 then bends the tip down for the drooping arc.
+      // - taper 0.6 keeps the frond mostly the same thickness so leaves
+      //   attach all along, instead of pinching to a thin twig at the end.
+      withLevel({ children: 26, lenRatio: 0.95, angle: 1.15, angleVar: 0.04, rollVar: 0.04, phyllotaxis: 'spiral', startPlacement: 0.97, endPlacement: 1, gravitropism: 0.09, susceptibility: 3.0, curveMode: 'backCurve', curveAmount: 1.05, distortion: 0.03, rollStart: 0, taper: 0.6, radiusRatio: 0.55, lengthPoints: [1, 1, 1, 1, 1], densityPoints: [1, 1, 1, 1, 1] }),
     ],
   },
   // --- Weber-Penn library species (SIGGRAPH 1995 parameter sets) ---------
