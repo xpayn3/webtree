@@ -129,6 +129,10 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.minDistance = 0.5;
 controls.maxDistance = 200;
+// maxPolarAngle is recomputed every frame in updateOrbitFloorClamp() so the
+// camera can swing under the canopy (look up at the tree) without ever
+// dipping below the ground plane — matches Unity / Unreal viewport
+// behaviour. The static value here is just a safe initial state.
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.mouseButtons = {
   LEFT: THREE.MOUSE.ROTATE,
@@ -136,6 +140,31 @@ controls.mouseButtons = {
   RIGHT: null, // reserved for branch grab
 };
 controls.addEventListener('start', () => { reframeAnim = null; });
+
+// Floor-aware orbit clamp. Recomputes maxPolarAngle every frame so the
+// camera can swing under the canopy (look up at the tree) but never dips
+// below the ground plane — same behaviour as the Unity / Unreal viewports.
+// Math: at polar angle θ from world-up, camera.y = target.y + dist·cos(θ).
+// We require camera.y ≥ FLOOR_Y, so cos(θ) ≥ (FLOOR_Y − target.y) / dist,
+// which gives θ ≤ acos((FLOOR_Y − target.y) / dist).
+const ORBIT_FLOOR_Y = 0.05;
+function updateOrbitFloorClamp() {
+  // Specialized modes (leaf creator, sculpt) drive their own controls and
+  // expect the original 0.49π behaviour — bail out so we don't fight them.
+  if (_leafCreatorActive) return;
+  const dy = controls.target.y - ORBIT_FLOOR_Y;
+  const dist = camera.position.distanceTo(controls.target);
+  if (dist < 1e-3 || dy <= 0) {
+    // Camera target is at/below the floor — fall back to horizon clamp
+    // rather than computing acos of an out-of-range value.
+    controls.maxPolarAngle = Math.PI * 0.5;
+    return;
+  }
+  const cosLimit = Math.max(-1, Math.min(1, -dy / dist));
+  // Tiny epsilon so floating-point bounce doesn't poke the camera through
+  // the floor on the next frame.
+  controls.maxPolarAngle = Math.acos(cosLimit) - 0.001;
+}
 
 // --- Orbit pivot re-target (3D-app-style) ------------------------------
 // On left-button pointerdown we can move controls.target so the camera
@@ -6867,6 +6896,11 @@ function applyConiferConfigToP() {
   P.leafSpread = 0.18;
   P.leafSizeVar = 0.35;
   P.leafDroop = P.cNeedleDroop;
+  // Conifer trunks are tall + slim — the broadleaf default of 0.5 tiles/m
+  // makes the bark pattern read as fine noise. Coarser tiling spreads each
+  // tile over more trunk surface so the plate / strip pattern is visible.
+  if (P.barkTexScaleU == null || P.barkTexScaleU === 0.5) P.barkTexScaleU = 0.3;
+  if (P.barkTexScaleV == null || P.barkTexScaleV === 0.5) P.barkTexScaleV = 0.3;
 }
 
 // Derive a bush shape — short trunk, primary stems fanning out (or rocketing
@@ -14918,6 +14952,7 @@ async function animate() {
     markRenderDirty(2);
   }
 
+  updateOrbitFloorClamp();
   controls.update();
   // Anything that mutates the visible scene this frame counts as motion.
   const sceneMoving = _simActive || hadFalling || landedDirty || !!reframeAnim;
