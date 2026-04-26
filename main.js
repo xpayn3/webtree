@@ -8018,11 +8018,16 @@ function endScrub() {
     // One final-quality rebuild. Use the highest tier the drag touched —
     // pure tubes-only drags (radius curve / profile / bark displace /
     // buttress / react) stay on the fast path, anything topology-affecting
-    // upgrades to full. Null (nothing happened during the gesture) falls
-    // back to full as a safe default.
-    const finalOpts = _scrubHighestMode === 'tubes' ? { tubesOnly: true } : {};
+    // upgrades to full. Null = no debouncedGenerate calls during the
+    // gesture (e.g. live-only material sliders like bark colour or leaf
+    // tint) — skip the rebuild entirely; otherwise dragging a bark slider
+    // re-runs leaf instancing on release and they appear to "respawn".
+    const mode = _scrubHighestMode;
     _scrubHighestMode = null;
-    debouncedGenerate(finalOpts);
+    if (mode !== null) {
+      const finalOpts = mode === 'tubes' ? { tubesOnly: true } : {};
+      debouncedGenerate(finalOpts);
+    }
   }
 }
 // Force-terminate any in-flight drag. Call before nuking scrubber DOM so we
