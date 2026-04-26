@@ -460,7 +460,10 @@ function buildTreeWorker(state) {
     // startPlacement is authoritative — baseSize used to clamp it from below.
     const tStart = Math.min(L.startPlacement, L.endPlacement);
     const tEnd = Math.max(L.startPlacement, L.endPlacement);
-    const count = L.children;
+    // Mirror of main.js: 'density' mode derives count from parent length.
+    const count = (L.placementMode === 'density')
+      ? Math.max(1, Math.round((L.density ?? 4) * Math.max(0.001, parentLen) * (tEnd - tStart)))
+      : L.children;
     const crownShape = fromTrunk ? (P.shape ?? 'free') : 'free';
     const lastIdx = stepData.length - 1;
     const phyllo = L.phyllotaxis ?? 'spiral';

@@ -21,10 +21,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r2';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r2';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r2';
-import { buildRootsGeometry } from './roots.js?v=r2';
+import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r3';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r3';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r3';
+import { buildRootsGeometry } from './roots.js?v=r3';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
 let MeshoptSimplifier = null;
@@ -1813,12 +1813,16 @@ function _makeAttractorGizmo() {
 }
 
 function syncAttractorGizmos() {
-  while (_attractorGizmos.length < P.attractors.length) {
+  // Only manual attractors get full draggable gizmos. Seeded crown attractors
+  // would flood the scene with hundreds of overlapping arrow widgets.
+  const manualIdx = [];
+  for (let i = 0; i < P.attractors.length; i++) if (!P.attractors[i].seeded) manualIdx.push(i);
+  while (_attractorGizmos.length < manualIdx.length) {
     const giz = _makeAttractorGizmo();
     _attractorRoot.add(giz.group);
     _attractorGizmos.push(giz);
   }
-  while (_attractorGizmos.length > P.attractors.length) {
+  while (_attractorGizmos.length > manualIdx.length) {
     const giz = _attractorGizmos.pop();
     _attractorRoot.remove(giz.group);
     giz.sphere.geometry.dispose(); giz.sphere.material.dispose();
@@ -1828,10 +1832,11 @@ function syncAttractorGizmos() {
       giz.axes[k].pickShaft.geometry.dispose(); giz.axes[k].pickShaft.material.dispose();
     }
   }
-  for (let i = 0; i < P.attractors.length; i++) {
+  for (let g = 0; g < manualIdx.length; g++) {
+    const i = manualIdx[g];
     const a = P.attractors[i];
-    _attractorGizmos[i].group.position.set(a.x, a.y, a.z);
-    _attractorGizmos[i].group.userData.attractorIdx = i;
+    _attractorGizmos[g].group.position.set(a.x, a.y, a.z);
+    _attractorGizmos[g].group.userData.attractorIdx = i;
   }
 }
 
@@ -3604,7 +3609,11 @@ function buildTree(nodesOut) {
     const baseSize = fromTrunk ? Math.max(0, Math.min(0.6, P.baseSize ?? 0)) : 0;
     const tStart = Math.min(L.startPlacement, L.endPlacement);
     const tEnd = Math.max(L.startPlacement, L.endPlacement);
-    const count = L.children;
+    // 'density' mode derives count from parent length × density × placement
+    // window. Default 'count' preserves legacy preset behavior.
+    const count = (L.placementMode === 'density')
+      ? Math.max(1, Math.round((L.density ?? 4) * Math.max(0.001, parentLen) * (tEnd - tStart)))
+      : L.children;
     const crownShape = fromTrunk ? (P.shape ?? 'free') : 'free';
     const lastIdx = stepData.length - 1;
     const phyllo = L.phyllotaxis ?? 'spiral';
@@ -8594,14 +8603,25 @@ buildParamGroup('Pruning', { treeType: 'broadleaf,conifer' });
 
   function renderAttractors() {
     list.innerHTML = '';
-    if (P.attractors.length === 0) {
+    // Auto-seeded crown attractors don't get individual cards (would flood UI
+    // with 60 entries) — they're managed via the Seed/Clear buttons below.
+    const seededCount = P.attractors.filter((a) => a.seeded).length;
+    const manual = P.attractors.filter((a) => !a.seeded);
+    if (manual.length === 0 && seededCount === 0) {
       const empty = document.createElement('div');
       empty.className = 'hint-empty';
       empty.textContent = 'No attractors. Add one to bend branches toward a point.';
       list.appendChild(empty);
     }
+    if (seededCount > 0) {
+      const note = document.createElement('div');
+      note.className = 'hint-empty';
+      note.textContent = `${seededCount} crown-seed attractors active`;
+      list.appendChild(note);
+    }
     for (let i = 0; i < P.attractors.length; i++) {
       const a = P.attractors[i];
+      if (a.seeded) continue;
       const card = document.createElement('div');
       card.className = 'attr-card';
       const header = document.createElement('div');
@@ -8634,13 +8654,89 @@ buildParamGroup('Pruning', { treeType: 'broadleaf,conifer' });
   addBtn.className = 'level-add';
   addBtn.className = 'btn-full-mt';
   addBtn.addEventListener('click', () => {
-    if (P.attractors.length >= 6) return;
+    // Cap manual attractors at 6 (don't count auto-seeded crown attractors).
+    const manualCount = P.attractors.filter((a) => !a.seeded).length;
+    if (manualCount >= 6) return;
     P.attractors.push({ x: (Math.random() - 0.5) * 10, y: 8 + Math.random() * 5, z: (Math.random() - 0.5) * 10, strength: 0.5 });
     renderAttractors();
     syncAttractorGizmos();
     debouncedGenerate();
   });
   wrap.appendChild(addBtn);
+
+  // Crown seeder — bulk-populate attractors in a shape so branches space-fill
+  // the canopy organically (light-touch space colonization).
+  const seedRow = document.createElement('div');
+  seedRow.style.display = 'flex';
+  seedRow.style.gap = '6px';
+  seedRow.style.marginTop = '6px';
+  const seedSphere = document.createElement('button');
+  seedSphere.textContent = 'Seed crown (sphere)';
+  seedSphere.className = 'btn-full-mt';
+  seedSphere.style.flex = '1';
+  const seedConical = document.createElement('button');
+  seedConical.textContent = 'Cone';
+  seedConical.className = 'btn-full-mt';
+  seedConical.style.flex = '0 0 auto';
+  const clearSeeded = document.createElement('button');
+  clearSeeded.textContent = 'Clear seeded';
+  clearSeeded.className = 'btn-full-mt';
+  clearSeeded.style.flex = '0 0 auto';
+  function _seedCrownAttractors(shape) {
+    // Remove any prior seeded attractors so re-seeding is idempotent.
+    P.attractors = P.attractors.filter((a) => !a.seeded);
+    const count = 60;
+    const trunkH = P.trunkHeight ?? 10;
+    const cy = trunkH * 0.7;
+    const radius = trunkH * 0.45;
+    const seed = ((P.seed | 0) ^ 0xC707) >>> 0;
+    let s = seed || 1;
+    const rng = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    for (let i = 0; i < count; i++) {
+      // Sample a point inside the chosen shape (cube-rejection for sphere).
+      let x, y, z;
+      let tries = 0;
+      do {
+        x = (rng() * 2 - 1);
+        y = (rng() * 2 - 1);
+        z = (rng() * 2 - 1);
+        tries++;
+        if (tries > 12) break;
+      } while (x * x + y * y + z * z > 1);
+      let px, py, pz;
+      if (shape === 'cone') {
+        // Cone: radius scales linearly from 1 (at bottom) → 0 (top)
+        const t = (y + 1) * 0.5;            // 0 at bottom, 1 at top
+        const rScale = 1 - t * 0.85;        // narrow but not zero at apex
+        px = x * radius * rScale;
+        py = cy + (y - 0.5) * trunkH * 0.5; // cone spans roughly upper half
+        pz = z * radius * rScale;
+      } else {
+        // Sphere
+        px = x * radius;
+        py = cy + y * radius * 0.7;         // slightly flattened ellipsoid
+        pz = z * radius;
+      }
+      P.attractors.push({
+        x: px, y: py, z: pz,
+        strength: 0.3,
+        seeded: true,
+      });
+    }
+    renderAttractors();
+    syncAttractorGizmos();
+    debouncedGenerate();
+  }
+  seedSphere.addEventListener('click', () => _seedCrownAttractors('sphere'));
+  seedConical.addEventListener('click', () => _seedCrownAttractors('cone'));
+  clearSeeded.addEventListener('click', () => {
+    P.attractors = P.attractors.filter((a) => !a.seeded);
+    renderAttractors();
+    syncAttractorGizmos();
+    debouncedGenerate();
+  });
+  seedRow.append(seedSphere, seedConical, clearSeeded);
+  wrap.appendChild(seedRow);
   details.appendChild(wrap);
   sidebarBody.appendChild(details);
   renderAttractors();

@@ -238,6 +238,12 @@ export const PARAM_SCHEMA = [
 
 export const LEVEL_SCHEMA = [
   { key: 'children',        label: 'Branch count',     min: 1,   max: 120,  step: 1,     default: 3    },
+  // Placement mode: 'count' = exactly N children (legacy/default).
+  // 'density' = derive count from parent length × density × placement window
+  // — fixes the "ring of N children" artifact at low counts and makes branches
+  // scale with parent size automatically.
+  { key: 'placementMode',   label: 'Placement mode',   type: 'select', options: ['count', 'density'], default: 'count' },
+  { key: 'density',         label: 'Density (per m)',  min: 0.5, max: 12,   step: 0.1,   default: 4    },
   { key: 'lenRatio',        label: 'Length',           min: 0.1, max: 3,    step: 0.02,  default: 0.7  },
   // Weber-Penn branch-radius ratio — child base = parent's local radius × this.
   { key: 'radiusRatio',     label: 'Radius ratio',     min: 0.1, max: 1.0,  step: 0.02,  default: 0.6  },
