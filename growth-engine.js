@@ -1,22 +1,29 @@
-// growth-engine.js — shared math + tree-build helpers.
+// growth-engine.js — single source of truth for the tree-growth pipeline.
 //
-// This module exists so identical helper code doesn't have to live in BOTH
-// main.js (sync fallback path) and tree-worker.js (off-thread builder). The
-// previous worker had a top-of-file warning ("Keep them in sync when you
-// change one") that was a footgun every time a fix landed in one place but
-// not the other.
+// Both main.js (sync fallback) and tree-worker.js (off-thread builder)
+// import from here, so the math can no longer drift between paths. Was
+// previously parallel copies in both files with a "keep in sync" warning at
+// the top of the worker — a footgun every time a fix landed in one place
+// but not the other.
 //
-// SCOPE OF THIS PHASE: only the small, pure-function helpers are extracted
-// here. The big growth functions (buildTree / buildChains / applyBranchWobble
-// / applyGravitySag / buildTube / tubeFromChain) still live in their original
-// files. Extracting those into here is a follow-up — they touch THREE.Vector3
-// internally, are larger, and the two existing copies have diverged in subtle
-// ways over time, so a careful side-by-side merge with parity testing is
-// needed before they can collapse to one source.
+// EXPORTS:
 //
-// No three.js dependency in any function below — they all operate on plain
-// numbers + typed arrays. Workers can import this directly without paying the
-// cost of dragging three.js into the worker module graph for nothing.
+//   Direct (no THREE dependency, can be tree-shaken):
+//     SplineSampler, ProfileSampler           — Catmull-Rom samplers
+//     normalizeTropism, sampleFalloffArr      — tropism shape helpers
+//     tubeAnalyticNormals                     — central-diff vertex normals
+//     applyBranchWobble, applyGravitySag      — skeleton perturbations
+//     buildChains                             — DFS chain segmentation
+//     buildRingFrames                         — parallel-transport frames
+//     buildTube                               — full tube extruder (POJO chain)
+//
+//   Factory (THREE injected — see makeTreeBuilder docstring for why):
+//     makeTreeBuilder(THREE).buildTree        — full topology builder
+//
+// All numeric work uses plain numbers + typed arrays. Only buildTree (inside
+// the factory) touches THREE.Vector3 — the THREE injection lets the worker
+// (CDN-loaded three.js) and main.js (importmapped three.js) share this same
+// module without one paying the cost of the other's three.js graph.
 
 import { mulberry32, _localRng, smoothNoise1D, fbm3D, worley3D } from './noise.js?v=r18';
 
