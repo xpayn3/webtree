@@ -15877,13 +15877,22 @@ renderer.domElement.addEventListener('pointerleave', () => {
 //   __parity.compare('before', 'after') → drift report
 // Type __parity.help() for full usage. The harness is self-contained in
 // parity-harness.js — this hook just supplies the live state references.
-window.__parity = _parityMakeConsoleAPI(() => ({
-  P,
-  treeMesh,
-  // Re-read the let-bound SoA arrays each call — they get swapped on grow.
-  skeletonSoA: {
-    posX: skPosX, posY: skPosY, posZ: skPosZ,
-    radius: skRadius, parentIdx: skParentIdx,
-    count: skN,
+window.__parity = _parityMakeConsoleAPI(
+  // getState — re-read the let-bound SoA arrays each call (they get swapped
+  // on grow), and current treeMesh / P references.
+  () => ({
+    P,
+    treeMesh,
+    skeletonSoA: {
+      posX: skPosX, posY: skPosY, posZ: skPosZ,
+      radius: skRadius, parentIdx: skParentIdx,
+      count: skN,
+    },
+  }),
+  // actions — let the harness drive a multi-seed sweep without knowing
+  // about main's internals.
+  {
+    setSeed(s) { P.seed = s | 0; },
+    regen() { return generateTree(); },
   },
-}));
+);

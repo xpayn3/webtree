@@ -164,7 +164,19 @@ function saveSnapshots(snaps) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snaps)); } catch (e) {}
 }
 
-export function makeConsoleAPI(getState) {
+// Console API. `actions` is { setSeed(s), regen() } — main.js wires these to
+// its own `P.seed = s` + `generateTree()` so the harness can drive a sweep
+// without knowing about main's internals. Both are optional; if missing the
+// sweep features just throw a friendly warning instead of silent breakage.
+export function makeConsoleAPI(getState, actions = {}) {
+  async function regenerateAndSettle() {
+    if (typeof actions.regen !== 'function') return;
+    const r = actions.regen();
+    if (r && typeof r.then === 'function') await r;
+    // Two animation frames so the geometry pool fill commits AND the GPU has
+    // bound the new BufferAttribute arrays before we read them back.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
   return {
     snapshot(label) {
       if (!label) { console.warn('parity.snapshot needs a label'); return null; }
@@ -174,6 +186,65 @@ export function makeConsoleAPI(getState) {
       saveSnapshots(all);
       console.log('[parity] snapshot saved as', label, snap);
       return snap;
+    },
+    // Run N seeds back-to-back, snapshot each under `${prefix}:seed-${seed}`.
+    // Useful for "did my refactor break ANY species or seed?" — sweep before
+    // changes, sweep after, compareSweep diffs them as a set.
+    async sweep(prefix, n = 5, startSeed = 1) {
+      if (!prefix) { console.warn('parity.sweep needs a prefix'); return null; }
+      if (typeof actions.setSeed !== 'function' || typeof actions.regen !== 'function') {
+        console.warn('parity.sweep needs setSeed + regen actions wired in main.js');
+        return null;
+      }
+      const all = loadSnapshots();
+      const captured = [];
+      for (let i = 0; i < n; i++) {
+        const seed = startSeed + i;
+        actions.setSeed(seed);
+        await regenerateAndSettle();
+        const label = `${prefix}:seed-${seed}`;
+        const snap = snapshotState(label, getState());
+        all[label] = snap;
+        captured.push(snap);
+        console.log(`[parity] (${i + 1}/${n}) seed=${seed}`, snap.skeleton, snap.liveTree);
+      }
+      saveSnapshots(all);
+      console.log(`[parity] sweep '${prefix}' done — ${captured.length} snapshots saved`);
+      return captured;
+    },
+    // Compare two sweeps by prefix. Pairs `${a}:seed-N` with `${b}:seed-N` and
+    // reports any seed where the hashes drifted.
+    compareSweep(prefixA, prefixB) {
+      const all = loadSnapshots();
+      const labels = Object.keys(all);
+      const pickPrefix = (p) => labels
+        .filter((k) => k.startsWith(p + ':seed-'))
+        .map((k) => ({ key: k, seed: parseInt(k.slice((p + ':seed-').length), 10) }))
+        .sort((x, y) => x.seed - y.seed);
+      const A = pickPrefix(prefixA);
+      const B = pickPrefix(prefixB);
+      if (A.length === 0 || B.length === 0) {
+        console.warn(`[parity] missing sweep — A=${A.length}, B=${B.length}`);
+        return null;
+      }
+      const matches = [];
+      for (const a of A) {
+        const b = B.find((x) => x.seed === a.seed);
+        if (!b) continue;
+        const drift = compareSnapshots(all[a.key], all[b.key]);
+        matches.push({ seed: a.seed, drift });
+      }
+      const broken = matches.filter((m) => m.drift.length > 0);
+      if (broken.length === 0) {
+        console.log(`[parity] ✓ ${prefixA} vs ${prefixB} — all ${matches.length} seeds identical`);
+      } else {
+        console.warn(`[parity] ✗ ${prefixA} vs ${prefixB} — ${broken.length}/${matches.length} seeds drifted`);
+        console.table(broken.map((m) => ({
+          seed: m.seed,
+          fields: m.drift.map((d) => d.field).join(','),
+        })));
+      }
+      return broken;
     },
     list() {
       const all = loadSnapshots();
@@ -215,6 +286,9 @@ export function makeConsoleAPI(getState) {
       console.log(`parity-harness — manual regression check.
 
   __parity.snapshot('label')       capture current tree state under a label
+  __parity.sweep('prefix', n, s0)  generate n seeds (default 5, start 1),
+                                   snapshot each under prefix:seed-N
+  __parity.compareSweep('a', 'b')  pair-compare two sweeps by seed
   __parity.list()                  show all saved snapshots
   __parity.compare('a', 'b')       diff two snapshots, report drift
   __parity.get('label')            retrieve a saved snapshot
@@ -223,7 +297,8 @@ export function makeConsoleAPI(getState) {
   __parity.help()                  this message
 
 Snapshots persist in localStorage between page reloads. Workflow for verifying
-a refactor: snapshot('before') → make changes → snapshot('after') → compare.`);
+a refactor: sweep('before', 5) → make changes → sweep('after', 5) →
+compareSweep('before', 'after').`);
     },
   };
 }
