@@ -34,6 +34,7 @@ import {
   buildTube,
   makeTreeBuilder,
 } from './growth-engine.js?v=r18';
+import { makeConsoleAPI as _parityMakeConsoleAPI } from './parity-harness.js?v=r18';
 // One TreeBuilder per app — captures THREE so the engine's internal Vector3s
 // resolve to this page's three.js (the worker creates its own builder against
 // its own CDN-loaded three.js). buildTree below is the same function the
@@ -15868,3 +15869,21 @@ renderer.domElement.addEventListener('pointerleave', () => {
 // the worker pool can only serve one full rebuild at a time. The
 // _sanitizeForBuild() pre-pass and refSteps clamp deliver the real
 // bulletproofing benefit those tests were meant to validate.)
+
+// Manual parity-check console hook. Use after a tree has been generated:
+//   await __parity.snapshot('before')   → store hashes in localStorage
+//   …make changes / refactor…
+//   await __parity.snapshot('after')
+//   __parity.compare('before', 'after') → drift report
+// Type __parity.help() for full usage. The harness is self-contained in
+// parity-harness.js — this hook just supplies the live state references.
+window.__parity = _parityMakeConsoleAPI(() => ({
+  P,
+  treeMesh,
+  // Re-read the let-bound SoA arrays each call — they get swapped on grow.
+  skeletonSoA: {
+    posX: skPosX, posY: skPosY, posZ: skPosZ,
+    radius: skRadius, parentIdx: skParentIdx,
+    count: skN,
+  },
+}));
