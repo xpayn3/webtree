@@ -1,6 +1,6 @@
 // Windy Tree service worker — offline app shell + CDN cache + update lifecycle.
 // Bump VERSION to invalidate every cached asset on the next page load.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `windy-tree-${VERSION}`;
 
 // Hard-precache shell. Versioned URLs (?v=...) match the index.html imports
@@ -19,6 +19,7 @@ const APP_SHELL = [
   './growth-engine.js?v=r18',
   './parity-harness.js?v=r18',
   './tsl-noise.js',
+  './bark-textures.js?v=r18',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-maskable.svg',
