@@ -1,5 +1,13 @@
 // Canvas-based UI widgets. Pure DOM/Canvas — no tree-state dependencies.
 
+// Tropism + falloff math used to live in this file directly. Both the worker
+// and main.js needed them too, so they moved into growth-engine.js — this
+// file imports for internal panel use, and re-exports so callers reading
+// these names from ui-widgets keep working without a module-graph rewrite.
+import { normalizeTropism as _normalizeTropism, sampleFalloffArr as _sampleFalloffArr } from './growth-engine.js?v=r18';
+export const normalizeTropism = _normalizeTropism;
+export const sampleFalloffArr = _sampleFalloffArr;
+
 // --- Linear spline widget -----------------------------------------------
 export class SplineEditor {
   constructor(container, { points = [1,1,1,1,1], min = 0.1, max = 2.5, baseLabel = 'BASE', tipLabel = 'TIP' } = {}) {
@@ -230,58 +238,6 @@ export class SplineEditor {
     ctx.textAlign = 'right'; ctx.fillText(this.tipLabel, w - 4, h - 4);
     ctx.textAlign = 'left';
   }
-}
-
-// Tropism normalization — accepts both legacy scalar (back-compat with species
-// presets) and the new Houdini-style object form authored via TropismPanel.
-// Scalar: gravitropism pulled straight down, phototropism pulled toward sun.
-// Object: explicit direction + falloff curve along branch + by-level multiplier.
-const _TROPISM_DEFAULTS = {
-  gravity: { dirX: 0,  dirY: -1, dirZ: 0 },
-  photo:   { dirX: 0,  dirY:  1, dirZ: 0 },
-};
-export function normalizeTropism(v, kind) {
-  const def = _TROPISM_DEFAULTS[kind];
-  if (typeof v === 'number') {
-    return {
-      enabled: v !== 0,
-      dirX: def.dirX, dirY: def.dirY, dirZ: def.dirZ,
-      strength: v,
-      falloff: null,
-      byLevel: false,
-      _useSun: kind === 'photo',
-    };
-  }
-  if (v && typeof v === 'object') {
-    return {
-      enabled: v.enabled !== false,
-      dirX: (v.dirX ?? def.dirX),
-      dirY: (v.dirY ?? def.dirY),
-      dirZ: (v.dirZ ?? def.dirZ),
-      strength: v.strength ?? 0,
-      falloff: Array.isArray(v.falloff) ? v.falloff : null,
-      byLevel: !!v.byLevel,
-      _useSun: false,
-    };
-  }
-  return { enabled: false, dirX: 0, dirY: 0, dirZ: 0, strength: 0, falloff: null, byLevel: false, _useSun: false };
-}
-
-export function sampleFalloffArr(arr, t) {
-  if (!arr || arr.length < 2) return 1;
-  const n = arr.length;
-  const f = Math.max(0, Math.min(1, t)) * (n - 1);
-  const i1 = Math.floor(f);
-  const i2 = Math.min(n - 1, i1 + 1);
-  const i0 = Math.max(0, i1 - 1);
-  const i3 = Math.min(n - 1, i2 + 1);
-  const u = f - i1;
-  const p0 = arr[i0], p1 = arr[i1], p2 = arr[i2], p3 = arr[i3];
-  const a = 2 * p1;
-  const b = p2 - p0;
-  const c = 2 * p0 - 5 * p1 + 4 * p2 - p3;
-  const d = -p0 + 3 * p1 - 3 * p2 + p3;
-  return 0.5 * (a + b * u + c * u * u + d * u * u * u);
 }
 
 // --- Tropism panel (Houdini-style: enable + vec3 + strength + falloff + mod) -

@@ -55,6 +55,14 @@
       <div id="brush-cursor" hidden></div>
       <aside id="sculpt-toolbar"></aside>
       <div id="tree-labels"></div>
+      <button id="mobile-menu-btn" type="button" aria-label="Show controls" aria-controls="sidebar" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div id="mobile-sidebar-backdrop" hidden></div>
       <button id="help-btn" type="button" title="Help & controls (?)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/>
@@ -456,7 +464,7 @@
       showTab('broadleaf');
     })();
   </script>
-  <script type="module" src="main.js?v=r19"></script>
+  <script type="module" src="main.js?v=r20"></script>
   <script>
     // PWA bootstrap: service-worker registration + update toast + file-handler
     // launchQueue intake. Kept inline so it runs even on a cold cache.

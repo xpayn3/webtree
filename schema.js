@@ -5,7 +5,7 @@
 export const PARAM_SCHEMA = [
   { group: 'Trunk', params: [
     // Size + subdivision
-    { key: 'trunkHeight', label: 'Height', min: 3, max: 30, step: 0.5, default: 11.0 },
+    { key: 'trunkHeight', label: 'Height', min: 3, max: 30, step: 0.5, default: 11.0, display: { scale: 1, unit: 'm', precision: 1 } },
     // Skeleton subdivision count for the trunk's reference curve. Higher =
     // smoother trunk silhouette + more vertices to drive bark displacement.
     { key: 'trunkSteps', label: 'Skeleton subdivisions', min: 5, max: 64, step: 1, default: 22 },
@@ -57,8 +57,8 @@ export const PARAM_SCHEMA = [
     // Radius model (Weber-Penn parametric): trunk radius is a direct slider,
     // branches taper from baseRadius → tipRadius via taperExp, children scale
     // from parent-local radius via per-level radiusRatio.
-    { key: 'baseRadius', label: 'Base radius',  min: 0.02, max: 1.2,  step: 0.01,  default: 0.35 },
-    { key: 'tipRadius',  label: 'Tip radius',   min: 0.002, max: 0.15, step: 0.002, default: 0.028 },
+    { key: 'baseRadius', label: 'Base radius',  min: 0.02, max: 1.2,  step: 0.01,  default: 0.35,  display: { scale: 100, unit: 'cm', precision: 1 } },
+    { key: 'tipRadius',  label: 'Tip radius',   min: 0.002, max: 0.15, step: 0.002, default: 0.028, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'taperExp',   label: 'Taper curve',  min: 0.5,  max: 4.0,  step: 0.05, default: 1.6 },
     // Post-multipliers on the parametric radii.
     { key: 'rootFlare', label: 'Root flare', min: 0, max: 4, step: 0.05, default: 1.0 },
@@ -87,7 +87,7 @@ export const PARAM_SCHEMA = [
     { key: 'barkDetail',         label: 'Micro detail', min: 0, max: 1,   step: 0.02, default: 0, tubesOnly: true, hidden: true },
     { key: 'barkDetailFreq',     label: 'Detail freq',  min: 4,  max: 40, step: 0.5, default: 12.0, tubesOnly: true, hidden: true },
     { key: 'buttressAmount', label: 'Buttress',       min: 0, max: 2,   step: 0.02, default: 0, tubesOnly: true, hidden: true },
-    { key: 'buttressHeight', label: 'Buttress H',     min: 0.3, max: 5, step: 0.1,  default: 1.5, tubesOnly: true, hidden: true },
+    { key: 'buttressHeight', label: 'Buttress H',     min: 0.3, max: 5, step: 0.1,  default: 1.5, tubesOnly: true, hidden: true, display: { scale: 1, unit: 'm', precision: 1 } },
     { key: 'buttressLobes',  label: 'Buttress lobes', min: 2,   max: 10,step: 1,    default: 5, tubesOnly: true, hidden: true },
     // Reaction wood — asymmetric radial thickening on the compression side
     // of horizontal branches. Niche; default off.
@@ -151,14 +151,17 @@ export const PARAM_SCHEMA = [
     { key: 'leavesStart',        label: 'Start height', min: 0,   max: 0.9, step: 0.02, default: 0 },
     { key: 'leafPhyllotaxis',    label: 'Arrangement',  type: 'select', options: ['spiral', 'opposite', 'alternate', 'random'], default: 'alternate' },
     // Size & shape.
-    { key: 'leafSize',           label: 'Size',         min: 0.02, max: 1.5, step: 0.005, default: 0.15, rescale: true },
+    { key: 'leafSize',           label: 'Size',         min: 0.02, max: 1.5, step: 0.005, default: 0.15, rescale: true, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'leafSizeVar',        label: 'Size variance',min: 0,   max: 1,   step: 0.05, default: 0.55 },
     // Leaf geometry detail. Industry-standard LOD: silhouette (full shape mesh,
     // ~200 tris/leaf) for hero shots; bent (curved strip, ~32 tris) for medium
     // distance; flat (textured quad, 2 tris) for performance + far LOD. The
     // alpha-cutout texture preserves the leaf silhouette in all three modes.
     // 200k leaves × 2 tris = 400k → easy 60fps; × 200 tris = 40M → ~24fps.
-    { key: 'leafQuality',        label: 'Mesh detail',  type: 'select', options: ['flat', 'bent', 'silhouette'], default: 'bent' },
+    // Default 'flat' matches Speedtree/Unreal foliage cards: alpha-cutout +
+    // normal map carry the silhouette and shading depth; per-leaf cupping is
+    // imperceptible at typical viewing distance and burns 16× the geometry.
+    { key: 'leafQuality',        label: 'Mesh detail',  type: 'select', options: ['flat', 'bent', 'silhouette'], default: 'flat' },
     // Pose.
     { key: 'leafSpread',         label: 'Spread',       min: 0,   max: 1.2, step: 0.05, default: 0.45 },
     { key: 'leafDroop',          label: 'Droop',        min: 0,   max: 1,   step: 0.05, default: 0 },
@@ -169,7 +172,7 @@ export const PARAM_SCHEMA = [
     // --- Advanced placement (hidden by default — kept for presets / power users) ---
     { key: 'leafChainSteps',     label: 'Branch depth', min: 1,   max: 32,  step: 1,    default: 5,    hidden: true },
     { key: 'leafBranchFill',     label: 'Branch fill',  min: 0,   max: 3,   step: 0.05, default: 1,    hidden: true },
-    { key: 'leafMaxRadius',      label: 'Max twig radius',min: 0.005,max: 1.0, step: 0.005,default: 0.08, hidden: true },
+    { key: 'leafMaxRadius',      label: 'Max twig radius',min: 0.005,max: 1.0, step: 0.005,default: 0.08, hidden: true, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'leafInset',          label: 'Plane inset',  min: -0.5,max: 0.5, step: 0.01, default: 0,    hidden: true },
     { key: 'fallenMax',          label: 'Fallen max',   min: 0,   max: 300, step: 5,    default: 120, live: true, hidden: true },
     { key: 'fallenFade',         label: 'Fade time',    min: 0.5, max: 10,  step: 0.1,  default: 3.0, live: true, hidden: true },
@@ -179,7 +182,7 @@ export const PARAM_SCHEMA = [
   // material / colour controls (matches how SpeedTree and The Grove split
   // them in their UI).
   { group: 'Stems', treeType: 'broadleaf', params: [
-    { key: 'leafStemLen',         label: 'Length',         min: 0,    max: 0.5, step: 0.01, default: 0 },
+    { key: 'leafStemLen',         label: 'Length',         min: 0,    max: 0.5, step: 0.01, default: 0, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'leafStemAngle',       label: 'Forward lean',   min: 0,    max: 1,   step: 0.02, default: 0.3 },
     { key: 'leafStemThick',       label: 'Thickness',      min: 0.3,  max: 3,   step: 0.05, default: 1.0 },
   ]},
@@ -213,8 +216,8 @@ export const PARAM_SCHEMA = [
     { key: 'fruitsEnable', label: 'Enable',    type: 'select', options: ['off', 'on'], default: 'off' },
     { key: 'fruitShape',   label: 'Shape',     type: 'select', options: ['sphere', 'teardrop', 'blossom'], default: 'sphere' },
     { key: 'fruitDensity', label: 'Density',   min: 0,    max: 1,    step: 0.02,  default: 0.3 },
-    { key: 'fruitSize',    label: 'Size',      min: 0.01, max: 0.2,  step: 0.005, default: 0.04 },
-    { key: 'fruitHang',    label: 'Hang len',  min: 0,    max: 0.3,  step: 0.005, default: 0.04 },
+    { key: 'fruitSize',    label: 'Size',      min: 0.01, max: 0.2,  step: 0.005, default: 0.04, display: { scale: 100, unit: 'cm', precision: 1 } },
+    { key: 'fruitHang',    label: 'Hang len',  min: 0,    max: 0.3,  step: 0.005, default: 0.04, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'fruitHue',     label: 'Hue',       min: 0,    max: 1,    step: 0.01,  default: 0,    live: true },
     { key: 'fruitLum',     label: 'Brightness',min: 0.1,  max: 0.9,  step: 0.02,  default: 0.45, live: true },
     { key: 'fruitSat',     label: 'Saturation',min: 0,    max: 1,    step: 0.02,  default: 0.75, live: true },
@@ -223,18 +226,18 @@ export const PARAM_SCHEMA = [
     { key: 'vinesEnable',     label: 'Enable',       type: 'select', options: ['off', 'on'], default: 'off' },
     { key: 'vineCount',       label: 'Count',        min: 1,    max: 8,    step: 1,     default: 2    },
     { key: 'vineCoverage',    label: 'Coverage',     min: 0.2,  max: 1,    step: 0.05,  default: 0.7  },
-    { key: 'vineThickness',   label: 'Thickness',    min: 0.01, max: 0.12, step: 0.005, default: 0.035 },
+    { key: 'vineThickness',   label: 'Thickness',    min: 0.01, max: 0.12, step: 0.005, default: 0.035, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'vineCoils',       label: 'Coils / m',    min: 0.2,  max: 3,    step: 0.05,  default: 0.8  },
-    { key: 'vineLeafSize',    label: 'Leaf size',    min: 0.1,  max: 1,    step: 0.02,  default: 0.35 },
+    { key: 'vineLeafSize',    label: 'Leaf size',    min: 0.1,  max: 1,    step: 0.02,  default: 0.35, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'vineLeafDensity', label: 'Leaf density', min: 0,    max: 40,   step: 1,     default: 12   },
     { key: 'vineHue',         label: 'Hue',          min: 0,    max: 1,    step: 0.01,  default: 0.08, live: true },
     { key: 'vineLum',         label: 'Brightness',   min: 0.04, max: 0.8,  step: 0.02,  default: 0.28, live: true },
   ]},
   { group: 'LOD', params: [
     { key: 'lodAutoSwitch', label: 'Auto-switch',  type: 'select', options: ['off', 'on'], default: 'off' },
-    { key: 'lodDist1',      label: 'Distance LOD1',min: 5,  max: 200, step: 1,    default: 20 },
-    { key: 'lodDist2',      label: 'Distance LOD2',min: 10, max: 400, step: 1,    default: 60 },
-    { key: 'lodDist3',      label: 'Distance LOD3',min: 20, max: 800, step: 1,    default: 140 },
+    { key: 'lodDist1',      label: 'Distance LOD1',min: 5,  max: 200, step: 1,    default: 20,  display: { scale: 1, unit: 'm', precision: 0 } },
+    { key: 'lodDist2',      label: 'Distance LOD2',min: 10, max: 400, step: 1,    default: 60,  display: { scale: 1, unit: 'm', precision: 0 } },
+    { key: 'lodDist3',      label: 'Distance LOD3',min: 20, max: 800, step: 1,    default: 140, display: { scale: 1, unit: 'm', precision: 0 } },
   ]},
   { group: 'Global', params: [
     { key: 'globalScale',  label: 'Global scale',  min: 0.3, max: 3.0, step: 0.05, default: 1.0 },
@@ -270,14 +273,14 @@ export const PARAM_SCHEMA = [
   ]},
   { group: 'Pruning', params: [
     { key: 'pruneMode',    label: 'Shape',    type: 'select', options: ['off', 'ellipsoid'], default: 'off' },
-    { key: 'pruneRadius',  label: 'Radius',   min: 2, max: 40, step: 0.5, default: 9 },
-    { key: 'pruneHeight',  label: 'Height',   min: 2, max: 40, step: 0.5, default: 7 },
-    { key: 'pruneCenterY', label: 'Center Y', min: 0, max: 40, step: 0.5, default: 10 },
+    { key: 'pruneRadius',  label: 'Radius',   min: 2, max: 40, step: 0.5, default: 9,  display: { scale: 1, unit: 'm', precision: 1 } },
+    { key: 'pruneHeight',  label: 'Height',   min: 2, max: 40, step: 0.5, default: 7,  display: { scale: 1, unit: 'm', precision: 1 } },
+    { key: 'pruneCenterY', label: 'Center Y', min: 0, max: 40, step: 0.5, default: 10, display: { scale: 1, unit: 'm', precision: 1 } },
   ]},
   { group: 'Stubs (dead wood)', params: [
     { key: 'stubsEnable', label: 'Enable',    type: 'select', options: ['off', 'on'], default: 'off' },
     { key: 'stubsChance', label: 'Chance',    min: 0,    max: 1,   step: 0.02, default: 0.3 },
-    { key: 'stubsLength', label: 'Length',    min: 0.1,  max: 1.5, step: 0.05, default: 0.5 },
+    { key: 'stubsLength', label: 'Length',    min: 0.1,  max: 1.5, step: 0.05, default: 0.5, display: { scale: 1, unit: 'm', precision: 2 } },
     { key: 'stubsTaper',  label: 'Taper',     min: 0,    max: 1,   step: 0.05, default: 0.55 },
     { key: 'stubsHue',    label: 'Hue',       min: 0,    max: 1,   step: 0.01, default: 0.08, live: true },
     { key: 'stubsLum',    label: 'Brightness',min: 0.04, max: 0.6, step: 0.02, default: 0.18, live: true },
@@ -1268,8 +1271,8 @@ export const CONIFER_SCHEMA = [
     { key: 'cTwigTaper',    label: 'Twig taper',    min: 0.2,  max: 3,    step: 0.05, default: 1.4 },
   ]},
   { group: 'Needles', params: [
-    { key: 'cNeedleLength', label: 'Length',        min: 0.1,  max: 0.8,  step: 0.01, default: 0.35 },
-    { key: 'cNeedleWidth',  label: 'Width',         min: 0.05, max: 0.5,  step: 0.01, default: 0.18, live: true },
+    { key: 'cNeedleLength', label: 'Length',        min: 0.1,  max: 0.8,  step: 0.01, default: 0.35, display: { scale: 100, unit: 'cm', precision: 1 } },
+    { key: 'cNeedleWidth',  label: 'Width',         min: 0.05, max: 0.5,  step: 0.01, default: 0.18, live: true, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'cNeedleDensity',label: 'Density',       min: 3,    max: 60,   step: 1,    default: 8 },
     { key: 'cNeedleChain',  label: 'Chain depth',   min: 1,    max: 5,    step: 1,    default: 3 },
     { key: 'cNeedleFacing', label: 'Face outward',  min: 0,    max: 1,    step: 0.05, default: 0.55 },
@@ -1277,7 +1280,7 @@ export const CONIFER_SCHEMA = [
   ]},
   { group: 'Cones', params: [
     { key: 'cConeCount',    label: 'Count',         min: 0,    max: 150,  step: 1,    default: 10 },
-    { key: 'cConeSize',     label: 'Size',          min: 0.08, max: 0.5,  step: 0.01, default: 0.2 },
+    { key: 'cConeSize',     label: 'Size',          min: 0.08, max: 0.5,  step: 0.01, default: 0.2, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'cConeHang',     label: 'Hang',          min: 0,    max: 1,    step: 0.05, default: 0.5 },
   ]},
 ];
@@ -1288,8 +1291,8 @@ export const CONIFER_SCHEMA = [
 // landscape shrubs.
 export const BUSH_SCHEMA = [
   { group: 'Bush Shape', params: [
-    { key: 'bHeight',       label: 'Height (m)',     min: 0.3, max: 3.5,  step: 0.05, default: 1.0 },
-    { key: 'bSpread',       label: 'Spread (m)',     min: 0.4, max: 4.0,  step: 0.05, default: 1.2 },
+    { key: 'bHeight',       label: 'Height',         min: 0.3, max: 3.5,  step: 0.05, default: 1.0, display: { scale: 1, unit: 'm', precision: 2 } },
+    { key: 'bSpread',       label: 'Spread',         min: 0.4, max: 4.0,  step: 0.05, default: 1.2, display: { scale: 1, unit: 'm', precision: 2 } },
     { key: 'bStems',        label: 'Primary stems',  min: 3,   max: 24,   step: 1,    default: 10 },
     { key: 'bBranchiness',  label: 'Branchiness',    min: 1,   max: 12,   step: 1,    default: 6 },
     { key: 'bTwigLen',      label: 'Twig length',    min: 0.2, max: 1.0,  step: 0.02, default: 0.55 },
@@ -1310,7 +1313,7 @@ export const BUSH_SCHEMA = [
     // visual size matches what the broadleaf species use. Real bush leaves
     // are 1-3cm but at scene scale that's invisible, so values default to
     // the broadleaf range (0.08-0.25).
-    { key: 'bLeafSize',     label: 'Leaf size',      min: 0.02, max: 0.5,  step: 0.005, default: 0.15 },
+    { key: 'bLeafSize',     label: 'Leaf size',      min: 0.02, max: 0.5,  step: 0.005, default: 0.15, display: { scale: 100, unit: 'cm', precision: 1 } },
     { key: 'bLeafDensity',  label: 'Density',        min: 1,    max: 40,   step: 1,     default: 12 },
     { key: 'bLeafSpread',   label: 'Leaf spread',    min: 0,    max: 1.0,  step: 0.02,  default: 0.3 },
     { key: 'bLeafDroop',    label: 'Droop',          min: 0,    max: 1,    step: 0.05,  default: 0.1 },
@@ -1493,7 +1496,7 @@ export const PARAM_DESCRIPTIONS = {
   leafTilt:         'Random tilt added to each leaf orientation',
   leafColorVar:     'Per-leaf hue/saturation/brightness jitter',
   leafPhyllotaxis:  'Arrangement pattern of leaves on a twig (spiral / opposite / alternate / random)',
-  leafQuality:      'Leaf mesh detail. flat = 2 tris (fastest, far LOD). bent = 32 tris (default). silhouette = full shape mesh, ~200 tris (close-ups, slow on dense canopies).',
+  leafQuality:      'Leaf mesh detail. flat = 2 tris (default — matches Speedtree/Unreal foliage cards). bent = 32 tris (per-leaf cup, mostly invisible at typical distance). silhouette = ~200 tris (close-ups, very slow on dense canopies).',
   leafMaxRadius:    'Skip leaves on twigs thicker than this (keeps them off main branches)',
   leafInset:        'Shift the leaf along its blade Y axis — for textures whose visible body is offset',
   // Stems (petioles)

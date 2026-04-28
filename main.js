@@ -7,7 +7,7 @@ import * as THREE from 'three';
 // at boot before the rest of init runs.
 const EMBED_CLEAN = new URLSearchParams(location.search).get('embed') === 'clean';
 if (EMBED_CLEAN) document.body.classList.add('embed-clean');
-import { positionLocal, time, uniform, sin, vec3, vec4, float, instanceIndex, pass, mrt, output, normalView, normalWorld, mix, renderOutput, frontFacing, texture as tslTexture, smoothstep, max as tslMax } from 'three/tsl';
+import { positionLocal, time, uniform, sin, vec3, vec4, float, instanceIndex, pass, mrt, output, normalView, normalWorld, mix, renderOutput, frontFacing, texture as tslTexture, smoothstep, max as tslMax, attribute as tslAttribute, clamp as tslClamp } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 // Optional post-FX (loaded lazily so missing files don't break the whole app).
 let aoFn = null, dofFn = null;
@@ -21,9 +21,25 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { mulberry32, _hashSeed, _localRng, hash1D, smoothNoise1D, hash2D, valueNoise2D, fbm2D, worley2D, fbm3D, worley3D } from './noise.js?v=r18';
-import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, sampleDensityArr, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r18';
-import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor, normalizeTropism, sampleFalloffArr } from './ui-widgets.js?v=r18';
+// Only mulberry32 + _localRng are read directly from main.js now — the
+// other noise functions used to be called inline by buildTree / tubeFromChain
+// and have moved into growth-engine.js along with those functions. main.js
+// just needs an RNG seed for the global stream + a per-leaf local RNG for
+// foliage placement.
+import { mulberry32, _localRng } from './noise.js?v=r18';
+import { PARAM_SCHEMA, LEVEL_SCHEMA, makeDefaultLevel, PHYSICS_SCHEMA, SPECIES, BROADLEAF_KEYS, CONIFER_KEYS, BUSH_KEYS, CONIFER_SCHEMA, BUSH_SCHEMA, PARAM_DESCRIPTIONS } from './schema.js?v=r18';
+import { SplineEditor, TropismPanel, ProfileEditor, LeafSilhouetteEditor } from './ui-widgets.js?v=r18';
+import {
+  buildChains,
+  buildTube,
+  makeTreeBuilder,
+} from './growth-engine.js?v=r18';
+// One TreeBuilder per app — captures THREE so the engine's internal Vector3s
+// resolve to this page's three.js (the worker creates its own builder against
+// its own CDN-loaded three.js). buildTree below is the same function the
+// worker calls, so the sync-fallback path now produces bit-identical output
+// at the same seed instead of the old "almost-the-same" mirror.
+const _treeBuilder = makeTreeBuilder(THREE);
 import { buildRootsGeometry } from './roots.js?v=r18';
 // meshoptimizer — higher-quality LOD simplification than three's SimplifyModifier.
 // Lazy-loaded from CDN; falls back to SimplifyModifier if unavailable.
@@ -2399,6 +2415,19 @@ function loadColor(url) {
 }
 const leafMapA = loadColor('./tex/leaf.png');
 const leafMapB = loadColor('./tex/leaf_b.png');
+// Re-fit the flat-leaf quad to the texture's alpha bbox once the bundled PNG
+// finishes loading. Without this, the boot-time rebuildLeafGeo runs against
+// an unloaded image and falls back to a full UV-0-1 quad (no crop).
+for (const tex of [leafMapA, leafMapB]) {
+  if (tex.image && !tex.image.complete) {
+    tex.image.addEventListener('load', () => {
+      if (typeof rebuildLeafGeo === 'function' && (P?.leafShape || 'Texture') === 'Texture') {
+        rebuildLeafGeo();
+        if (typeof markRenderDirty === 'function') markRenderDirty(2);
+      }
+    }, { once: true });
+  }
+}
 const leafNormal = texLoader.load('./tex/leaf_normal.jpg');
 leafNormal.anisotropy = 8;
 // Original image textures — kept as a hard fallback if the generator fails
@@ -3146,26 +3175,45 @@ const uWindFreq = uniform(1.2);
 const uWindDirX = uniform(1.0);
 const uWindDirZ = uniform(0.3);
 const uWindGust = uniform(0.4);
+// Trunk reference radius — written by generateTreeOnce after computing
+// _maxRootR. Drives the radius-based sway weight: thin twigs whip, the
+// trunk barely moves. Default keeps the shader sane until the first build.
+const uMaxRadius = uniform(0.3);
 
 // Bark: shader-only wind. Per-vertex phase from XZ position so adjacent verts
-// sway in sync but distant branches drift. Sway weight = max(0, localY * k)
-// — trunk base barely moves, twig tips sway most. Replaces the per-frame CPU
+// sway in sync but distant branches drift. Replaces the per-frame CPU
 // updateBark() pass when wind mode is 'shader' (default).
 const _barkPhaseHash = positionLocal.x.mul(0.21).add(positionLocal.z.mul(0.17));
 const _barkPhase  = time.mul(uWindFreq).add(_barkPhaseHash);
 const _barkPhase2 = time.mul(uWindFreq.mul(0.55)).add(_barkPhaseHash.mul(1.7));
-const _barkHeightWeight = tslMax(float(0), positionLocal.y.mul(0.06));
+// Sway weight: thin twigs whip, trunk is stiff. (1 - radius/maxRadius) is the
+// primary driver; a smoothstep over the bottom 0.5 m anchors the very base so
+// roots don't drift even when their cross-section is uniform with the trunk.
+// Replaces the old `max(0, y * 0.06)` weight which scaled unboundedly with
+// world Y and ignored thickness — a fat low horizontal limb swayed as much as
+// a thin twig at the same height.
+const _aBarkRadius = tslAttribute('aRadius', 'float');
+const _barkRadiusWeight = float(1).sub(tslClamp(_aBarkRadius.div(uMaxRadius), float(0), float(1)));
+const _barkBaseAnchor = smoothstep(float(0), float(0.5), positionLocal.y);
+const _barkSwayWeight = _barkRadiusWeight.mul(_barkBaseAnchor);
 const _barkAmp = sin(_barkPhase).mul(0.025)
   .add(sin(_barkPhase2).mul(0.015).mul(uWindGust))
-  .mul(uWindStrength).mul(_barkHeightWeight);
+  .mul(uWindStrength).mul(_barkSwayWeight).mul(0.9);
 const barkWindDisp = vec3(_barkAmp.mul(uWindDirX), float(0), _barkAmp.mul(uWindDirZ)).mul(uBarkWindEnable);
 
-// Leaves: per-instance phase from instanceIndex so they don't all flutter in sync.
+// Leaves: per-instance phase from instanceIndex so they don't all flutter in
+// sync, and per-instance amplitude from `aLeafRadius` so leaves on thick
+// interior branches barely vibrate while tip leaves whip. The 0.4 floor
+// guarantees every leaf still moves a little — a static interior canopy
+// reads as cardboard.
 const _leafPhase = time.mul(uWindFreq.mul(2.2)).add(instanceIndex.toFloat().mul(0.43));
 const _leafPhase2 = time.mul(uWindFreq.mul(0.9)).add(instanceIndex.toFloat().mul(0.31));
+const _aLeafRadius = tslAttribute('aLeafRadius', 'float');
+const _leafRadiusWeight = float(1).sub(tslClamp(_aLeafRadius.div(uMaxRadius), float(0), float(1)));
+const _leafSwayWeight = _leafRadiusWeight.mul(0.6).add(0.4);
 const _leafAmp = sin(_leafPhase).mul(0.05)
   .add(sin(_leafPhase2).mul(0.03).mul(uWindGust))
-  .mul(uWindStrength).mul(4);
+  .mul(uWindStrength).mul(4).mul(_leafSwayWeight);
 const leafWindDisp = vec3(_leafAmp.mul(uWindDirX), float(0), _leafAmp.mul(uWindDirZ)).mul(uWindEnable);
 
 // --- Materials (Node variants so TSL displacement applies) ---------------
@@ -3294,7 +3342,83 @@ function _buildSilhouetteLeafGeo(p, maxHalfW_u, lenF, midribCurl, apexCurl) {
   return g;
 }
 
+// --- Leaf alpha-bbox crop (overdraw reduction) -------------------------
+// Alpha-cutout textures pay full fragment-shader cost on every pixel inside
+// the quad's screen bbox, even discarded ones. A typical leaf PNG has ~30%
+// transparent margin around the silhouette. Cropping the quad to the tight
+// alpha bbox (and shifting UVs to match) cuts wasted invocations roughly in
+// half — same look, same texture, smaller geometry footprint per leaf.
+// This is the same trick Speedtree's atlas packer applies to leaf cards.
+const _leafAlphaBboxCache = new WeakMap();
+function _computeAlphaBbox(source, threshold = 16, pad = 1) {
+  if (!source) return null;
+  const isImg = source instanceof HTMLImageElement;
+  if (isImg && (!source.complete || !source.naturalWidth)) return null;
+  if (isImg && _leafAlphaBboxCache.has(source)) return _leafAlphaBboxCache.get(source);
+  let canvas;
+  if (source instanceof HTMLCanvasElement || source instanceof OffscreenCanvas) {
+    canvas = source;
+  } else if (isImg) {
+    canvas = document.createElement('canvas');
+    canvas.width = source.naturalWidth;
+    canvas.height = source.naturalHeight;
+    canvas.getContext('2d').drawImage(source, 0, 0);
+  } else {
+    return null;
+  }
+  const w = canvas.width, h = canvas.height;
+  let data;
+  try { data = canvas.getContext('2d').getImageData(0, 0, w, h).data; }
+  catch (e) { return null; } // CORS-tainted images can't be read
+  let minX = w, maxX = -1, minY = h, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      if (data[row + x * 4 + 3] > threshold) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null; // fully transparent
+  minX = Math.max(0, minX - pad);
+  maxX = Math.min(w - 1, maxX + pad);
+  minY = Math.max(0, minY - pad);
+  maxY = Math.min(h - 1, maxY + pad);
+  // Three.js textures default flipY=true: canvas y=0 (top) → UV v=1 (top of leaf).
+  const bbox = {
+    u0: minX / w,
+    u1: (maxX + 1) / w,
+    v0: 1 - (maxY + 1) / h,
+    v1: 1 - minY / h,
+  };
+  if (isImg) _leafAlphaBboxCache.set(source, bbox);
+  return bbox;
+}
+function _currentLeafAlphaBbox() {
+  const shape = P.leafShape || 'Texture';
+  if (shape === 'Texture') return _computeAlphaBbox(leafMapA?.image);
+  if (shape === 'Upload') {
+    const tex = (typeof leafMatA !== 'undefined') ? leafMatA?.map : null;
+    return _computeAlphaBbox(tex && tex !== leafMapA && tex !== leafMapB ? tex.image : null);
+  }
+  return _computeAlphaBbox(_proceduralLeafCanvas);
+}
+
+// Curl sliders only displace mesh z; on 'flat' (4-vert quad) they're inert.
+// Hide both the inline curl rows and the Leaf Creator's Bend section to keep
+// the UI honest — switching to bent/silhouette brings them back instantly.
+function _updateLeafCurlUiVisibility() {
+  const hidden = (P.leafQuality || 'flat') === 'flat';
+  for (const el of document.querySelectorAll('.lc-curl-row, .lc-curl-section')) {
+    el.style.display = hidden ? 'none' : '';
+  }
+}
+
 function rebuildLeafGeo() {
+  _updateLeafCurlUiVisibility();
   const base = P.leafProfile || {};
   // If a named preset is selected, sample its profile (matches what
   // applyLeafShape draws into the texture). Custom uses the user's tuned
@@ -3321,13 +3445,24 @@ function rebuildLeafGeo() {
   const halfW = maxHalfW;
   let g;
   if (quality === 'flat') {
+    // Crop the quad to the texture's tight alpha bbox so the rasterizer skips
+    // the empty margin every leaf would otherwise pay fragment cost on. Falls
+    // back to a full UV-0-1 quad when the texture isn't readable yet (boot
+    // race, CORS, or fully transparent).
+    const bb = _currentLeafAlphaBbox();
+    const u0 = bb ? bb.u0 : 0, u1 = bb ? bb.u1 : 1;
+    const v0 = bb ? bb.v0 : 0, v1 = bb ? bb.v1 : 1;
+    const x0 = -halfW + 2 * halfW * u0;
+    const x1 = -halfW + 2 * halfW * u1;
+    const y0 = lenF * v0;
+    const y1 = lenF * v1;
     const positions = new Float32Array([
-      -halfW, 0,    0,
-       halfW, 0,    0,
-       halfW, lenF, 0,
-      -halfW, lenF, 0,
+      x0, y0, 0,
+      x1, y0, 0,
+      x1, y1, 0,
+      x0, y1, 0,
     ]);
-    const uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
+    const uvs = new Float32Array([u0, v0, u1, v0, u1, v1, u0, v1]);
     const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
     g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -3378,6 +3513,11 @@ function rebuildLeafGeo() {
   if (leafInstA && P.treeType !== 'conifer') leafInstA.geometry = g;
   if (leafInstB && P.treeType !== 'conifer') leafInstB.geometry = g;
   if (vineLeafInst) vineLeafInst.geometry = g;
+  // Re-pin the per-instance radius attribute onto the new shared geometry so
+  // TSL `attribute('aLeafRadius')` keeps resolving after a leaf-shape swap.
+  // Without this, leaf wind would read 0 from a missing attribute → every
+  // leaf would whip at full amplitude until the next foliage rebuild.
+  if (leafInstA && leafInstA.userData._leafRadiusAttr) g.setAttribute('aLeafRadius', leafInstA.userData._leafRadiusAttr);
   if (old) old.dispose();
 }
 // Initial build deferred — runs after P.leafProfile is populated below.
@@ -3862,6 +4002,10 @@ function applyLeafShape() {
     _setLeafNormalFor(m, false);
     _setLeafBumpFor(m, _proceduralLeafBumpTex, bumpScale);
   }
+  // Re-fit the flat-leaf quad now that the procedural canvas reflects the new
+  // silhouette. The first rebuildLeafGeo at the top of this function ran
+  // against stale alpha (or an empty canvas on the first call).
+  rebuildLeafGeo();
 }
 
 // --- Leaf stems (thin cylinder, shared across broadleaf leaves) ---------
@@ -4206,6 +4350,19 @@ P.settings = {
   autoOrbit: false,
   autoOrbitSpeed: 8,
 };
+// Mobile default: drop straight into Performance preset so the renderer
+// initializes with pixelRatio=1, shadows off, bloom off. The dependent
+// fields read from P.settings during scene/material setup further down,
+// so overriding here is enough — no extra apply* call needed at boot.
+// Detection: width below the same 768px breakpoint the sidebar drawer uses.
+// User can still bump quality back up via the Quality dropdown.
+if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 768px)').matches) {
+  P.settings.qualityPreset  = 'Performance';
+  P.settings.pixelRatio     = 1;
+  P.settings.shadowsEnabled = false;
+  P.settings.shadowQuality  = 'Low';
+  P.settings.bloomEnabled   = false;
+}
 P.treeType = 'broadleaf';
 // Procedural bark style. Picked per species; falls back to 'oak'. The
 // generator produces an albedo + normal CanvasTexture pair on first use
@@ -4292,8 +4449,11 @@ const _scLocUp    = new THREE.Vector3();
 const _scAzimuth  = new THREE.Vector3();
 const _scChildDir = new THREE.Vector3();
 
-// Sun direction for phototropism — recomputed each buildTree() from the
-// azimuth/elevation params. Elevation=90° yields (0,1,0) — pure up-bias.
+// Sun direction cache for the TropismPanel UI. The shared growth-engine
+// computes its own sun direction from state.P inside buildTree, so this
+// trio only feeds the live preview arrow on the phototropism widget — call
+// _recomputeSunDir() before reading if you need it fresh after a sun-slider
+// edit.
 let _sunDirX = 0, _sunDirY = 1, _sunDirZ = 0;
 function _recomputeSunDir() {
   const el = ((P.sunElevation ?? 90) * Math.PI) / 180;
@@ -4304,1435 +4464,47 @@ function _recomputeSunDir() {
   _sunDirZ = c * Math.cos(az);
 }
 
-// normalizeTropism, _TROPISM_DEFAULTS, sampleFalloffArr live in ui-widgets.js
-// (imported above) because TropismPanel uses them internally.
-
-function buildTree(nodesOut) {
-  _recomputeSunDir();
-  const nodes = nodesOut;
-  const root = new TNode(new THREE.Vector3(0, 0, 0));
-  nodes.push(root);
-
-  // Walk an internode and grow a chain of nodes. Returns step data for children placement.
-  // Each branch-walk call gets a LOCAL rng keyed off the parent node's id +
-  // level + length. That means whatever number of random draws happens inside
-  // (for per-step distortion, forks, etc.) is isolated — changing kinkSteps
-  // refines the branch silhouette but never shifts the downstream random stream.
-  function walkInternode(startNode, startPos, dir, length, L, levelIdx = 0) {
-    const segLen = length / L.kinkSteps;
-    let cur = startNode;
-    const pos = startPos.clone();
-    const d = dir.clone();
-    const stepData = [];
-    // Position-keyed branch RNG — decoupled from the global random() stream
-    // so this branch's internal decisions don't shift when siblings or
-    // deeper levels consume draws. Spatial keys make it invariant under
-    // trunk / parent-branch subdivision changes.
-    const _qpos = (v) => Math.round(v * 1000) | 0;
-    const bRng = _localRng(
-      P.seed | 0,
-      _qpos(startPos.x), _qpos(startPos.y), _qpos(startPos.z),
-      _qpos(dir.x), _qpos(dir.y), _qpos(dir.z),
-      levelIdx,
-      Math.round(length * 1000),
-    );
-    // Derived from the local stream so it costs no global draws.
-    const branchSeed = bRng() * 137.5;
-    const freq = L.distortionFreq ?? 3;
-    const type = L.distortionType ?? 'random';
-    const amp = L.distortion ?? 0;
-    const susc = L.susceptibility ?? 1;
-    // ez-tree's `1/√radius` gnarliness rule, adapted for our pre-radius walk.
-    // Thicker → barely wobble, thinner → flap freely. We don't have node
-    // radius at this point (assignRadii is a post-pass), so use level depth
-    // as a proxy: trunk + main scaffolds (L0..L2) at 1×, mid (L3) at 1.4×,
-    // deepest twigs (last level) at 2.0×. Matches the "alive twigs, steady
-    // trunk" feel without per-species tuning.
-    const lastLevel = (P.levels.length - 1);
-    const thinScale = levelIdx >= lastLevel ? 2.0
-                    : levelIdx === lastLevel - 1 ? 1.4
-                    : 1.0;
-    const curveMode = L.curveMode ?? 'none';
-    const curveAmt = L.curveAmount ?? 0;
-    const tropG = normalizeTropism(L.gravitropism, 'gravity');
-    const tropP = normalizeTropism(L.phototropism, 'photo');
-    const levelMul = levelIdx + 1;
-    // Pick a stable curvature axis per branch (perpendicular-ish to initial dir)
-    const curveAngle = branchSeed;
-    const randPts = L.randomnessPoints;
-    for (let s = 0; s < L.kinkSteps; s++) {
-      const tNorm = s / L.kinkSteps;
-      let dx = 0, dz = 0;
-
-      // MTree-style randomness ramp — multiplies distortion amp at this step.
-      const rampMul = randPts ? sampleDensityArr(randPts, tNorm) : 1;
-      // kinkSteps invariance — perlin's smooth/correlated noise accumulates
-      // linearly across direction perturbations, so doubling kinkSteps
-      // doubled the total bend amount. Scale per-step amplitude by
-      // (8/kinkSteps) so the *total* curve stays constant regardless of
-      // segment count. Default kinkSteps=8 → factor 1 (no visible change).
-      const stepInv = 8 / Math.max(1, L.kinkSteps);
-      const ampE = amp * rampMul * thinScale * stepInv;
-
-      // Distortion noise — always perlin. Sine/twist/random variants removed
-      // (every species used 'perlin' anyway; switch overhead is gone now).
-      // Torsion removed — was rotating the perturbation around the growth axis,
-      // a per-spawn quaternion-style mult that no preset relied on.
-      if (ampE > 0) {
-        dx = smoothNoise1D(tNorm * freq + branchSeed) * ampE;
-        dz = smoothNoise1D(tNorm * freq + branchSeed + 47.3) * ampE;
-      }
-
-      // Parametric curvature (on top of noise). Weber-Penn's CurveBack lets
-      // the branch curve one way in its first half and back (or further) in
-      // the second half — tuned per level via (curveAmount, curveBack).
-      // Per-step contributions are scaled by stepInv (8/kinkSteps) so the
-      // total bend stays constant when the user changes Segments.
-      const curveBack = L.curveBack ?? 0;
-      if ((curveMode !== 'none' && curveAmt > 0) || Math.abs(curveBack) > 0.01) {
-        const cx = Math.cos(curveAngle), cz = Math.sin(curveAngle);
-        let curveBias = 0;
-        if (curveMode === 'sCurve')       curveBias = Math.sin(tNorm * Math.PI * 2) * curveAmt * 0.25 * stepInv;
-        else if (curveMode === 'backCurve') curveBias = tNorm * curveAmt * 0.18 * stepInv;
-        else if (curveMode === 'helical') {
-          const a = tNorm * Math.PI * 4 + branchSeed;
-          dx += Math.cos(a) * curveAmt * 0.1 * stepInv;
-          dz += Math.sin(a) * curveAmt * 0.1 * stepInv;
-          curveBias = 0;
-        }
-        // Weber-Penn asymmetric curve: first half uses curveAmount, second
-        // half reverses toward curveBack. Additive with the mode above.
-        if (Math.abs(curveBack) > 0.01) {
-          const firstHalf = tNorm < 0.5;
-          const t = firstHalf ? tNorm * 2 : (tNorm - 0.5) * 2;
-          const v = firstHalf ? curveAmt * 0.18 : -curveBack * 0.18;
-          curveBias += v * Math.sin(t * Math.PI) * stepInv;
-        }
-        dx += cx * curveBias;
-        dz += cz * curveBias;
-      }
-
-      // Tropism with susceptibility. Phototropism pulls toward sun (legacy) or
-      // an explicit direction (panel-authored); gravitropism pulls along its dir
-      // vector. Falloff samples 0..1 along the branch; byLevel scales by depth.
-      d.x += dx; d.z += dz;
-      // Tropism + attractors are physical pulls per unit length, not per
-      // step — scale by stepInv so doubling kinkSteps doesn't double the
-      // total drift toward gravity / sun / attractor points.
-      if (tropP.enabled) {
-        let f = tropP.falloff ? sampleFalloffArr(tropP.falloff, tNorm) : 1;
-        if (tropP.byLevel) f *= levelMul;
-        const s = tropP.strength * susc * f * stepInv;
-        if (tropP._useSun) { d.x += _sunDirX * s; d.y += _sunDirY * s; d.z += _sunDirZ * s; }
-        else               { d.x += tropP.dirX * s; d.y += tropP.dirY * s; d.z += tropP.dirZ * s; }
-      }
-      if (tropG.enabled) {
-        let f = tropG.falloff ? sampleFalloffArr(tropG.falloff, tNorm) : 1;
-        if (tropG.byLevel) f *= levelMul;
-        const s = tropG.strength * susc * f * stepInv;
-        d.x += tropG.dirX * s; d.y += tropG.dirY * s; d.z += tropG.dirZ * s;
-      }
-
-      // Attractors — bend heading toward user-placed world-space points
-      if (P.attractors && P.attractors.length > 0) {
-        for (const a of P.attractors) {
-          if (!a || (a.strength ?? 0) <= 0) continue;
-          const ax = a.x - pos.x, ay = a.y - pos.y, az = a.z - pos.z;
-          const d2 = ax * ax + ay * ay + az * az;
-          if (d2 < 0.05) continue;
-          const inv = 1 / Math.sqrt(d2);
-          const falloff = 1 / (1 + d2 * 0.03);
-          const pull = a.strength * falloff * 0.08 * stepInv;
-          d.x += ax * inv * pull;
-          d.y += ay * inv * pull * 0.6;
-          d.z += az * inv * pull;
-        }
-      }
-
-      // Branch twist — spiral the heading around world Y each step
-      const twist = L.twist ?? 0;
-      if (twist !== 0) {
-        const tw = twist * segLen;
-        const ct = Math.cos(tw), st = Math.sin(tw);
-        const nx = d.x * ct - d.z * st;
-        const nz = d.x * st + d.z * ct;
-        d.x = nx; d.z = nz;
-      }
-
-      // Zero-length guard: if tropism/curve/attractor terms cancelled d down
-      // to near-zero, normalize() would produce (0,0,0) and the branch
-      // would stall or snap back toward origin on the next step. Fall back
-      // to the initial dir (still valid, passed in by caller).
-      if (d.lengthSq() < 1e-8) d.copy(dir);
-      d.normalize();
-      pos.addScaledVector(d, segLen);
-      // Floor awareness — instead of letting droopy branches clip through
-      // the ground, bend them flat along y = FLOOR_Y. Once a branch touches
-      // the floor, we zero its vertical direction so subsequent segments
-      // continue horizontally (gravity will try to pull y down again each
-      // step, but the clamp keeps resetting it — effect: branch fans out
-      // along the ground instead of burying into it).
-      const FLOOR_Y = 0.03;
-      if (pos.y < FLOOR_Y) {
-        pos.y = FLOOR_Y;
-        d.y = 0;
-        const hMag = Math.hypot(d.x, d.z);
-        if (hMag > 1e-6) { d.x /= hMag; d.z /= hMag; }
-        else             { d.x = 1; d.z = 0; }
-      }
-      // TNode's constructor clones `pos` internally, so we don't need our own clone here.
-      const n = new TNode(pos, cur);
-      cur.children.push(n);
-      nodes.push(n);
-      // Weber-Penn: stamp relative position along the branch (0 at base, 1 at
-      // tip) and the level it belongs to so post-process taper can reshape
-      // the radius profile per level.
-      n.branchT = (s + 1) / L.kinkSteps;
-      n.branchLevel = levelIdx;
-      cur = n;
-      // Reuse n.pos (already a fresh clone inside TNode); only dir needs its own
-      // copy because `d` keeps mutating across steps.
-      stepData.push({ node: n, pos: n.pos, dir: d.clone() });
-
-      // Weber-Penn nSegSplits: expected number of forks across the branch.
-      // Each segment has a probability of spawning a sibling branch of the
-      // same level, angled by splitAngle. The original keeps growing straight.
-      const segSplits = L.segSplits ?? 0;
-      const splitAngle = L.splitAngle ?? 0.25;
-      if (segSplits > 0 && s < L.kinkSteps - 2) {
-        const stepsLeft = L.kinkSteps - 1 - s;
-        // Curve-weighted fork rate: sample splitPoints at this step's tNorm
-        // so the user can cluster forks near base, tip, or keep them even.
-        const splitMul = Array.isArray(L.splitPoints)
-          ? Math.max(0, sampleDensityArr(L.splitPoints, tNorm))
-          : 1;
-        const expected = (segSplits * splitMul) / L.kinkSteps;
-        const forks = Math.floor(expected) + (bRng() < (expected - Math.floor(expected)) ? 1 : 0);
-        for (let f = 0; f < forks; f++) {
-          if (Math.abs(d.y) > 0.98) _scUp.set(1, 0, 0); else _scUp.set(0, 1, 0);
-          const sright = _scRight.crossVectors(d, _scUp).normalize();
-          const slocUp = _scLocUp.crossVectors(sright, d).normalize();
-          const sroll = bRng() * Math.PI * 2;
-          const sca = Math.cos(sroll), scb = Math.sin(sroll);
-          const saxis = _scAzimuth.set(0, 0, 0).addScaledVector(sright, sca).addScaledVector(slocUp, scb);
-          const forkDir = _scChildDir.set(0, 0, 0)
-            .addScaledVector(d, Math.cos(splitAngle))
-            .addScaledVector(saxis, Math.sin(splitAngle))
-            .normalize()
-            .clone();
-          const forkLen = length * (stepsLeft / L.kinkSteps) * 0.9;
-          // Spawn the fork through a chainRoot bridge so the Weber-Penn
-          // radius model scales the fork base from parent-local radius
-          // (× radiusRatio) instead of inheriting the parent's full
-          // chainBase. Without this the fork began at parent thickness and
-          // bulged at the junction, and downstream children inherited the
-          // wrong chainBase.
-          const fbridge = new TNode(n.pos, n);
-          fbridge.radius = n.radius || 0;
-          fbridge.chainRoot = true;
-          fbridge.branchLevel = levelIdx;
-          n.children.push(fbridge);
-          nodes.push(fbridge);
-          growAtLevel(fbridge, n.pos, forkDir, forkLen, levelIdx);
-        }
-      }
-    }
-    return stepData;
-  }
-
-  function spawnChildrenAlong(stepData, parentLen, childLevelIdx, fromTrunk = false, refCurve = null) {
-    if (childLevelIdx >= P.levels.length) return;
-    const L = P.levels[childLevelIdx];
-    // Weber-Penn BaseSize is still fed to the crown-shape envelope below, but
-    // no longer clamps tStart. startPlacement is the user-facing dial for
-    // where branches begin; previously any value below baseSize was
-    // silently ignored (e.g. Maple baseSize=0.3 swallowed startPlacement<0.3).
-    const baseSize = fromTrunk ? Math.max(0, Math.min(0.6, P.baseSize ?? 0)) : 0;
-    const tStart = Math.min(L.startPlacement, L.endPlacement);
-    const tEnd = Math.max(L.startPlacement, L.endPlacement);
-    // 'density' mode derives count from parent length × density × placement
-    // window. Default 'count' preserves legacy preset behavior.
-    const count = (L.placementMode === 'density')
-      ? Math.max(1, Math.round((L.density ?? 4) * Math.max(0.001, parentLen) * (tEnd - tStart)))
-      : L.children;
-    const crownShape = fromTrunk ? (P.shape ?? 'free') : 'free';
-    const lastIdx = stepData.length - 1;
-    const phyllo = L.phyllotaxis ?? 'spiral';
-    const apical = L.apicalDominance ?? 0;
-    const stochastic = L.stochastic ?? 0;
-    // Per-parent local RNG — decoupled from the global random() stream so
-    // that editing deeper levels (L2/L3) doesn't shift the random draws that
-    // L1 saw earlier. Seed from the parent branch's stable identity.
-    const _qpos = (v) => Math.round(v * 1000) | 0;
-    const _anchor = stepData[0] && stepData[0].node && stepData[0].node.pos;
-    const sRng = _localRng(
-      P.seed | 0, 0xC01DB1A5, childLevelIdx,
-      _anchor ? _qpos(_anchor.x) : 0,
-      _anchor ? _qpos(_anchor.y) : 0,
-      _anchor ? _qpos(_anchor.z) : 0,
-      Math.round(parentLen * 1000),
-    );
-    // Opposite / decussate phyllotaxis: children come in pairs sharing the
-    // same parent-local height. pairIdx groups them so the frac calc yields
-    // matching t's for the pair.
-    const isPaired = phyllo === 'opposite' || phyllo === 'decussate';
-    const pairCount = isPaired ? Math.ceil(count / 2) : count;
-    let _pairJitter = 0;
-    for (let c = 0; c < count; c++) {
-      if (stochastic > 0 && sRng() < stochastic) continue;
-      const pairIdx = isPaired ? Math.floor(c / 2) : c;
-      const withinPair = isPaired ? (c % 2) : 0;
-      const stepIdx = isPaired ? pairIdx : c;
-      const stepCount = isPaired ? pairCount : count;
-      let frac = stepCount === 1 ? (tStart + tEnd) * 0.5 : tStart + (tEnd - tStart) * (stepIdx / (stepCount - 1));
-      if (stepCount > 1) {
-        const spacing = (tEnd - tStart) / (stepCount - 1);
-        if (!isPaired || withinPair === 0) {
-          _pairJitter = (sRng() - 0.5) * spacing * 0.24;
-        }
-        frac += isPaired ? _pairJitter : (sRng() - 0.5) * spacing * 0.24;
-        if (frac < tStart) frac = tStart;
-        else if (frac > tEnd) frac = tEnd;
-      }
-      if (Array.isArray(L.densityPoints)) {
-        const d = sampleDensityArr(L.densityPoints, frac);
-        if (d < 0.999 && sRng() > Math.max(0, Math.min(1, d))) continue;
-      }
-      // Spawn position + direction come from the parent's CANONICAL
-      // reference curve (when provided), not its user-resolution skeleton.
-      // This makes child spawn points invariant under subdivision changes
-      // on the parent. Parent attachment still uses the nearest actual
-      // skeleton node so physics / leaves stay hooked to real geometry.
-      let _spPos, _spDir, _spNode;
-      if (refCurve && refCurve.length >= 2) {
-        const refLast = refCurve.length - 1;
-        const idxF = Math.max(0, Math.min(refLast, frac * refLast));
-        const ri0 = Math.floor(idxF);
-        const ri1 = Math.min(refLast, ri0 + 1);
-        const u = idxF - ri0;
-        // Direction still uses the canonical ref curve so branch orientation
-        // is invariant under parent-resolution changes.
-        _spDir = refCurve[ri0].dir.clone().lerp(refCurve[ri1].dir, u);
-        if (_spDir.lengthSq() < 1e-10) _spDir.copy(refCurve[ri0].dir);
-        _spDir.normalize();
-        // Position snaps to the nearest parent chain node — guarantees the
-        // bridge sits exactly on the parent tube's Catmull-Rom curve instead
-        // of on the ref curve (which the tube no longer follows after we
-        // unified the trunk into a single sweep). Arbaro / Sapling / MTree
-        // all position branch bases at parent chain nodes for this reason.
-        const skelIdx = Math.max(0, Math.min(lastIdx, Math.round(frac * lastIdx)));
-        _spNode = stepData[skelIdx].node;
-        _spPos = _spNode.pos.clone();
-      } else {
-        // Fallback: snap to the nearest skeleton node so the bridge sits
-        // exactly on the parent chain's Catmull-Rom curve.
-        const idxF = Math.max(0, Math.min(lastIdx, frac * lastIdx));
-        const sIdx = Math.floor(idxF);
-        const sIdx1 = Math.min(lastIdx, sIdx + 1);
-        const uSp = idxF - sIdx;
-        const sp0 = stepData[sIdx];
-        const sp1 = stepData[sIdx1];
-        _spDir = sp0.dir.clone().lerp(sp1.dir, uSp);
-        if (_spDir.lengthSq() < 1e-10) _spDir.copy(sp0.dir);
-        _spDir.normalize();
-        _spNode = uSp < 0.5 ? sp0.node : sp1.node;
-        _spPos = _spNode.pos.clone();
-      }
-      const sp = { pos: _spPos, dir: _spDir, node: _spNode };
-      // Hoisted scratch — see _sc* constants below the function.
-      if (Math.abs(sp.dir.y) > 0.98) _scUp.set(1, 0, 0); else _scUp.set(0, 1, 0);
-      const right = _scRight.crossVectors(sp.dir, _scUp).normalize();
-      const locUp = _scLocUp.crossVectors(right, sp.dir).normalize();
-
-      // Apical dominance. Broadleaf default: base short, tip strong.
-      // Conifer (apicalInverted): base LONG, tip short → conical silhouette.
-      const apicalSide = L.apicalInverted ? frac : (1 - frac);
-      // Halved from original `1 - apical * apicalSide` — the full effect
-      // produced a "tip fan" where laterals near the parent tip grew much
-      // longer than base laterals. Real crowns taper more subtly.
-      const apicalLenMul = 1 - apical * apicalSide * 0.5;
-      const apicalAngleBoost = apical * apicalSide * 0.35;
-
-      // Weber-Penn nDownAngleV: angle varies along the parent branch.
-      // Positive `angleDecline` makes children angle OUT more toward the tip;
-      // negative makes them more vertical toward the tip (like conifers).
-      const declineBias = (L.angleDecline ?? 0) * (frac - 0.5) * 2;
-      // MTree-style start_angle ramp — additive, sampled at placement on parent.
-      const angleRamp = L.startAnglePoints ? sampleDensityArr(L.startAnglePoints, frac) : 0;
-      const angle = L.angle + apicalAngleBoost + declineBias + angleRamp + (sRng() - 0.5) * L.angleVar;
-
-      // Phyllotaxis: different roll patterns between successive children.
-      // rollStart offsets the whole pattern by a fixed phase so the user can
-      // orient the arrangement (e.g. point a Palm whorl toward the sun).
-      let roll;
-      switch (phyllo) {
-        // Opposite: pair members face 180° apart, all pairs share one plane.
-        case 'opposite':  roll = withinPair * Math.PI; break;
-        // Decussate: each successive pair rotates 90° from the last (maple, ash).
-        case 'decussate': roll = withinPair * Math.PI + pairIdx * (Math.PI / 2); break;
-        case 'whorled':   roll = (c / count) * Math.PI * 2; break;
-        default: /* 'spiral' */ roll = P.goldenRoll * (c + 1);
-      }
-      roll += (L.rollStart ?? 0);
-      // Fibonacci mode: force strict golden-angle spacing, suppress rollVar.
-      // This minimizes self-shadowing — the same rule nature uses for leaves
-      // and whorls. Branch-formula toggle in the Global group.
-      const _branchModel = P.branchModel || 'weber-penn';
-      if (_branchModel === 'fibonacci') {
-        roll = P.goldenRoll * (c + 1) + (L.rollStart ?? 0);
-      } else {
-        roll += (sRng() - 0.5) * L.rollVar;
-      }
-
-      // Apical continuation: the last child (at the parent's tip) can be forced
-      // to inherit the parent's direction with angle→0, creating a true central
-      // leader instead of an L/Y fork at the top. Length is boosted so it reads
-      // as the trunk's continuation, not a sibling.
-      const apicalContinue = L.apicalContinue ?? 0;
-      const isApicalChild = apicalContinue > 0 && count > 1 && c === count - 1;
-      const effAngle = isApicalChild ? angle * (1 - apicalContinue) : angle;
-      const cosR = Math.cos(roll), sinR = Math.sin(roll);
-      const azimuth = _scAzimuth.set(0, 0, 0).addScaledVector(right, cosR).addScaledVector(locUp, sinR);
-      const childDir = _scChildDir.set(0, 0, 0)
-        .addScaledVector(sp.dir, Math.cos(effAngle))
-        .addScaledVector(azimuth, Math.sin(effAngle))
-        .normalize();
-      // Context-sensitive signal decay: later siblings (higher c) get weaker.
-      // Models acrotonic hormone flow — earlier sibling starves the next one.
-      // Apical-continuation children bypass decay — they're THE leader.
-      const sig = L.signalDecay ?? 0;
-      const signalVigor = isApicalChild ? 1 : (sig > 0 ? Math.max(0.25, 1 - c * sig) : 1);
-      // Weber-Penn Shape envelope — scales primary branch length by position
-      // along the trunk to form canonical crown silhouettes (conical, spherical,
-      // flame, etc.). Only applies when spawning from trunk.
-      const shapeMul = shapeLenRatio(crownShape, (frac - baseSize) / Math.max(0.001, 1 - baseSize));
-      // Per-level length profile — scales child length by position along parent.
-      const lenMul = Array.isArray(L.lengthPoints) ? Math.max(0, sampleDensityArr(L.lengthPoints, frac)) : 1;
-      // Central-leader length boost so the continuation reads as the trunk
-      // extending, not as a fork sibling.
-      const apicalLenBoost = isApicalChild ? (1 + apicalContinue * 0.6) : 1;
-      // Honda (1971) straight/branch length ratios — apical child uses R1
-      // (~0.82: straight continuation), laterals use R2 (~0.6: side branch).
-      // Weber-Penn leaves lenRatio as-is.
-      let hondaMul = 1;
-      if (_branchModel === 'honda') {
-        const _r1 = P.hondaR1 ?? 0.94; // apical / straight continuation
-        const _r2 = P.hondaR2 ?? 0.86; // first lateral
-        hondaMul = isApicalChild ? _r1 : (c === 0 ? _r2 : _r2 * 0.81);
-      }
-      // apicalDominance scaling shouldn't apply to the apical-continuation
-      // child — that child is the leader and gets its own apicalLenBoost.
-      const _apicalLenMulEff = isApicalChild ? 1 : apicalLenMul;
-      const childLen = parentLen * L.lenRatio * _apicalLenMulEff * signalVigor * shapeMul * lenMul * apicalLenBoost * hondaMul;
-      // Bridge node — ALWAYS inserted, not just when refCurve is present.
-      // buildChains identifies branch-starts by `chainRoot`; without this
-      // flag, lateral chains at L2/L3/L4 were being treated as "extra
-      // siblings" of the continuation walk and skipped the junction flare +
-      // backward pad, causing them to float off the parent's surface.
-      // Bridge sits at sp.pos (already snapped to the parent's chain node).
-      const bridge = new TNode(sp.pos, sp.node);
-      bridge.radius = sp.node.radius || 0;
-      bridge.chainRoot = true;
-      bridge.branchLevel = childLevelIdx;
-      sp.node.children.push(bridge);
-      nodes.push(bridge);
-      growAtLevel(bridge, sp.pos, childDir, childLen, childLevelIdx);
-    }
-  }
-
-  // Weber-Penn crown-shape envelope. `ratio` runs 0 at trunk base to 1 at top.
-  // Return value multiplies the primary branch length so the branches together
-  // trace the named silhouette.
-  function shapeLenRatio(shape, ratio) {
-    if (!shape || shape === 'free') return 1;
-    const r = Math.max(0, Math.min(1, ratio));
-    switch (shape) {
-      case 'conical':        return 0.2 + 0.8 * (1 - r);
-      case 'spherical':      return 0.2 + 0.8 * Math.sin(Math.PI * r);
-      // Dome shape — widest at the crown BASE (where the hemisphere meets
-      // the trunk), narrow at the top. Old formula had this inverted:
-      // sin(πr·0.5) grows from 0→1 giving a wide-topped inverted bowl.
-      case 'hemispherical':  return 0.2 + 0.8 * Math.cos(Math.PI * r * 0.5);
-      case 'cylindrical':    return 1;
-      case 'tapered':        return 0.5 + 0.5 * (1 - r);
-      case 'flame':          return r <= 0.7 ? 0.15 + 0.85 * r / 0.7 : 0.15 + 0.85 * (1 - r) / 0.3;
-      case 'inverse':        return 0.2 + 0.8 * r;
-      case 'tend-flame':     return r <= 0.7 ? 0.5 + 0.5 * r / 0.7 : 0.5 + 0.5 * (1 - r) / 0.3;
-      default:               return 1;
-    }
-  }
-
-  function growAtLevel(startNode, startPos, dir, length, levelIdx) {
-    if (levelIdx >= P.levels.length) return;
-    // Growth phase — levels beyond phase*max are skipped; the partial level is scaled.
-    // growthPhase only scales the deepest (last) level — completed levels
-    // stay full-length so adding a new level doesn't retroactively stretch
-    // its parents.
-    const phase = P.growthPhase ?? 1;
-    const lastLevel = P.levels.length - 1;
-    if (levelIdx === lastLevel && phase <= 0) return;
-    const phaseLenMul = levelIdx < lastLevel ? 1 : Math.min(1, phase);
-    const L = P.levels[levelIdx];
-    const lenMul = lengthSpline ? lengthSpline.sample(P.levels.length > 1 ? levelIdx / (P.levels.length - 1) : 0) : 1;
-    const effLen = length * lenMul * phaseLenMul;
-    if (effLen < P.minLen) return;
-
-    const stepData = walkInternode(startNode, startPos, dir, effLen, L, levelIdx);
-    if (levelIdx + 1 < P.levels.length && phaseLenMul >= 1) {
-      spawnChildrenAlong(stepData, effLen, levelIdx + 1);
-    }
-  }
-
-  // Phase 1 — trunk(s). When trunkCount > 1 we fan multiple trunks from the
-  // shared root, each angled slightly outward.
-  const trunkCount = Math.max(1, P.trunkCount | 0);
-  const trunkSpread = P.trunkSplitSpread ?? 0.45;
-  // Y-fork: trunks share a single base, then diverge at this fraction of
-  // trunk height. 0 = legacy (fan from ground). Active only when trunkCount>1.
-  const trunkSplitHeight = Math.max(0, Math.min(0.95, P.trunkSplitHeight ?? 0));
-  const useDelayedSplit = trunkCount > 1 && trunkSplitHeight > 0;
-  let tk0ForkNode = null;     // tk=0 skeleton node closest to splitHeight
-  let tk0NoisePhase = 0;      // shared noise so the lower bole overlaps exactly
-  const trunkSegLen = P.trunkHeight / P.trunkSteps;
-  // Lean: initial pitch of the trunk base, in the horizontal direction
-  // `leanDirRad` (0 = +X, π/2 = +Z). Applied once to the starting tdir.
-  const lean = P.trunkLean ?? 0;
-  const leanDirRad = ((P.trunkLeanDir ?? 0) * Math.PI) / 180;
-  const leanAxisX = Math.cos(leanDirRad);
-  const leanAxisZ = Math.sin(leanDirRad);
-  // Bow: subtle S-curve along the full trunk length. Positive phase gives a
-  // single smooth arc that returns near vertical at the tip.
-  const bow = P.trunkBow ?? 0;
-  for (let tk = 0; tk < trunkCount; tk++) {
-    const tpos = new THREE.Vector3();
-    const tdir = new THREE.Vector3(0, 1, 0);
-    let tkAz = 0, tkOutward = 0;
-    if (trunkCount > 1) {
-      const az = (tk / trunkCount) * Math.PI * 2 + random() * 0.4;
-      const outward = trunkSpread;
-      tkAz = az; tkOutward = outward;
-      if (useDelayedSplit) {
-        // Y-fork: every trunk launches vertical from the shared root; the
-        // outward kick is applied later in the ref-curve loop above
-        // trunkSplitHeight.
-      } else {
-        tdir.set(Math.cos(az) * outward, 1, Math.sin(az) * outward).normalize();
-        tpos.set(Math.cos(az) * 0.25 * trunkSpread, 0, Math.sin(az) * 0.25 * trunkSpread);
-      }
-    }
-    if (lean > 0) {
-      // Tilt the initial heading by `lean` radians in the lean direction.
-      const s = Math.sin(lean), c = Math.cos(lean);
-      tdir.set(tdir.x * c + leanAxisX * s, tdir.y * c, tdir.z * c + leanAxisZ * s).normalize();
-    }
-    let tcur = root;
-    const trunkSteps = [];
-    const trunkTwist = P.trunkTwist ?? 0;
-    // Per-trunk local RNG so changing P.trunkSteps no longer shifts the
-    // downstream random stream.
-    const tRng = _localRng(P.seed | 0, 0xA1A1, tk);
-    // Noise phase for this trunk — picks the curve shape from the seed.
-    // In Y-fork mode all trunks share tk=0's phase so the lower bole paths
-    // coincide exactly until the split height.
-    let trunkNoisePhase;
-    if (useDelayedSplit) {
-      if (tk === 0) tk0NoisePhase = tRng() * 1000;
-      trunkNoisePhase = tk0NoisePhase;
-    } else {
-      trunkNoisePhase = tRng() * 1000;
-    }
-    // Capture starting direction before the loop (tdir is rebuilt per step).
-    const startDirX = tdir.x, startDirY = tdir.y, startDirZ = tdir.z;
-    const startPosX = tpos.x, startPosY = tpos.y, startPosZ = tpos.z;
-    const jAmp = P.trunkJitter * 6.5;
-    const multiRestoreCap = (trunkCount > 1 && !useDelayedSplit) ? 0.4 : 0;
-
-    // === Build a CANONICAL reference trunk curve at fixed resolution ===
-    // All branch spawn positions along this trunk come from the reference
-    // curve — NOT from the user-resolution skeleton. That way changing
-    // P.trunkSteps only refines the trunk's visible tessellation; branches
-    // stay anchored to the exact same points along the true trunk curve.
-    const REF_TRUNK_STEPS = 64;
-    const refSteps = [];
-    {
-      const refSegLen = P.trunkHeight / REF_TRUNK_STEPS;
-      const refPos = new THREE.Vector3(startPosX, startPosY, startPosZ);
-      const refDir = new THREE.Vector3(startDirX, startDirY, startDirZ);
-      const sinAmt  = (P.trunkSinuous ?? 0);
-      const sinFreq = (P.trunkSinuousFreq ?? 1.0);
-      for (let i = 0; i < REF_TRUNK_STEPS; i++) {
-        const tN = (i + 0.5) / REF_TRUNK_STEPS;
-        // Ramp noise / wander in over the first 15 % of trunk height so
-        // the base ring stays perpendicular to the ground. The first
-        // user-resolution trunk node samples ~refSteps[1] (tN ≈ 0.023);
-        // with a 5 % zone that vert was still ~45 % noisy, leaving the
-        // CatmullRom tangent at root tilted enough to lift one edge of
-        // the bottom tube ring off the floor. 15 % puts the first 1-2
-        // user nodes in the fully-vertical region. Smooth (smoothstep)
-        // ramp so there's no visible kink at the transition.
-        const _u = Math.max(0, Math.min(1, tN / 0.15));
-        const _baseAnchor = _u * _u * (3 - 2 * _u);
-        let nX = (smoothNoise1D(trunkNoisePhase + tN * 3.2) * jAmp
-               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 11.1) * jAmp * 0.3) * _baseAnchor;
-        let nZ = (smoothNoise1D(trunkNoisePhase + tN * 3.2 + 17.3) * jAmp
-               + smoothNoise1D(trunkNoisePhase + tN * 9.7 + 29.4) * jAmp * 0.3) * _baseAnchor;
-        const nY = smoothNoise1D(trunkNoisePhase + tN * 2.4 + 51.7) * 0.12 * _baseAnchor;
-        // Low-freq sinuous wander — independent of jAmp so cranking jitter
-        // doesn't compound it. Decoupled X/Z phases so the trunk doesn't just
-        // bend in one plane.
-        if (sinAmt > 0) {
-          nX += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq) * sinAmt * _baseAnchor;
-          nZ += smoothNoise1D(trunkNoisePhase * 0.13 + tN * sinFreq + 73.1) * sinAmt * _baseAnchor;
-        }
-        let dx = startDirX + nX;
-        let dy = startDirY + nY;
-        let dz = startDirZ + nZ;
-        if (multiRestoreCap > 0) dy += Math.min(1, tN / 0.6) * multiRestoreCap;
-        if (useDelayedSplit && tN > trunkSplitHeight) {
-          // Smooth ramp from 0 at the fork up to full trunkSpread by tN=1.
-          const span = Math.max(0.05, 1 - trunkSplitHeight);
-          const f = Math.min(1, (tN - trunkSplitHeight) / span);
-          const smooth = f * f * (3 - 2 * f);
-          dx += Math.cos(tkAz) * tkOutward * smooth;
-          dz += Math.sin(tkAz) * tkOutward * smooth;
-        }
-        if (bow > 0) {
-          const bowIntegral = 1 - Math.cos(tN * Math.PI);
-          const bowAmp = bow * 1.3;
-          dx += leanAxisX * bowIntegral * bowAmp;
-          dz += leanAxisZ * bowIntegral * bowAmp;
-        }
-        const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-        refDir.set(dx / dl, dy / dl, dz / dl);
-        if (trunkTwist !== 0) {
-          const tw = trunkTwist * refSegLen;
-          const ct = Math.cos(tw), st = Math.sin(tw);
-          const nx = refDir.x * ct - refDir.z * st;
-          const nz = refDir.x * st + refDir.z * ct;
-          refDir.x = nx; refDir.z = nz;
-        }
-        refPos.addScaledVector(refDir, refSegLen);
-        refSteps.push({ pos: refPos.clone(), dir: refDir.clone(), tN });
-      }
-    }
-
-    // === Build the user-resolution skeleton by sampling the reference ===
-    // Each user-visible trunk node's position is lerp'd from the canonical
-    // curve, so the skeleton is a polyline approximation of the SAME curve
-    // at every trunkSteps value. Branch spawn positions (below) pull from
-    // the reference curve directly for exactness, using the nearest
-    // skeleton node as parent for attachment.
-    const lerpDir = new THREE.Vector3();
-    // For tk>=1 in Y-fork mode, attach the first emitted node to tk=0's fork
-    // node instead of the global root. The lower-bole nodes are skipped.
-    if (useDelayedSplit && tk > 0 && tk0ForkNode) tcur = tk0ForkNode;
-    for (let i = 0; i < P.trunkSteps; i++) {
-      const tN = (i + 0.5) / P.trunkSteps;
-      if (useDelayedSplit && tk > 0 && tN < trunkSplitHeight) continue;
-      const refIdxF = tN * REF_TRUNK_STEPS - 0.5;
-      // Clamp BOTH ends — if tN/refIdxF were ever NaN or > 1 (e.g. an
-      // unsanitized P.trunkSteps), Math.floor/min still need a safe ceiling.
-      let ri0 = Math.max(0, Math.min(REF_TRUNK_STEPS - 1, Math.floor(refIdxF) | 0));
-      let ri1 = Math.max(0, Math.min(REF_TRUNK_STEPS - 1, ri0 + 1));
-      if (!refSteps[ri0]) {
-        if (typeof console !== 'undefined') console.warn('[buildTree] refSteps miss', { ri0, ri1, refIdxF, tN, trunkSteps: P.trunkSteps, len: refSteps.length });
-        ri0 = 0; ri1 = Math.min(1, refSteps.length - 1);
-        if (!refSteps[ri0]) continue; // can't recover, skip this trunk node
-      }
-      const u = Math.max(0, Math.min(1, refIdxF - ri0));
-      const nPos = refSteps[ri0].pos.clone().lerp(refSteps[ri1].pos, u);
-      lerpDir.copy(refSteps[ri0].dir).lerp(refSteps[ri1].dir, u);
-      if (lerpDir.lengthSq() < 1e-10) lerpDir.copy(refSteps[ri0].dir);
-      lerpDir.normalize();
-      const n = new TNode(nPos, tcur);
-      n.branchT = (i + 1) / P.trunkSteps;
-      n.isTrunk = true;
-      tcur.children.push(n);
-      nodes.push(n);
-      tcur = n;
-      tpos.copy(nPos);
-      tdir.copy(lerpDir);
-      trunkSteps.push({ node: n, pos: n.pos, dir: lerpDir.clone() });
-    }
-    // Capture tk=0's fork node so subsequent trunks can attach there.
-    if (useDelayedSplit && tk === 0 && trunkSteps.length > 0) {
-      let bestIdx = 0, bestDiff = Infinity;
-      for (let s = 0; s < trunkSteps.length; s++) {
-        const stN = (s + 0.5) / P.trunkSteps;
-        const diff = Math.abs(stN - trunkSplitHeight);
-        if (diff < bestDiff) { bestDiff = diff; bestIdx = s; }
-      }
-      tk0ForkNode = trunkSteps[bestIdx].node;
-    }
-    {
-      const apexLen = trunkSegLen * 1.2;
-      const apexPos1 = tpos.clone().addScaledVector(tdir, apexLen);
-      const apex1 = new TNode(apexPos1, tcur);
-      apex1.branchT = 1; apex1.isTrunk = true;
-      tcur.children.push(apex1); nodes.push(apex1);
-      const apexPos2 = apexPos1.clone().addScaledVector(tdir, apexLen * 0.7);
-      const apex2 = new TNode(apexPos2, apex1);
-      apex2.branchT = 1; apex2.isTrunk = true;
-      apex1.children.push(apex2); nodes.push(apex2);
-    }
-    // Decoupled: level-0 branch length derives from a fixed reference scaled
-    // by globalScale, NOT trunkHeight. Trunk height now only affects the
-    // trunk pole — sliding it taller/shorter no longer inflates the canopy.
-    const branchBaseLen = 9.0 * (P.globalScale ?? 1);
-    if (P.levels.length > 0) spawnChildrenAlong(trunkSteps, branchBaseLen, 0, true, refSteps);
-  }
-
-  // Pruning envelope — cut branches whose nodes fall outside the silhouette
-  if (P.pruneMode === 'ellipsoid') {
-    const rxz = P.pruneRadius, ry = P.pruneHeight, cy = P.pruneCenterY;
-    const inside = (n) => {
-      const dx = n.pos.x, dy = n.pos.y - cy, dz = n.pos.z;
-      return (dx * dx + dz * dz) / (rxz * rxz) + (dy * dy) / (ry * ry) <= 1;
-    };
-    // Mark every descendant of a cut-off branch as pruned. The tips filter in
-    // _foliagePhase skips pruned nodes so leaves never spawn on invisible
-    // branches (the node still lives in treeNodes[] even after being
-    // disconnected from its parent's children array).
-    const markPruned = (n) => {
-      n.pruned = true;
-      for (let i = 0; i < n.children.length; i++) markPruned(n.children[i]);
-    };
-    const prune = (n) => {
-      for (let i = n.children.length - 1; i >= 0; i--) {
-        const c = n.children[i];
-        // ALWAYS preserve trunk nodes — the trunk must run from root to apex
-        // regardless of envelope. The previous `c.pos.y < cy - ry` test failed
-        // when a trunk node landed just barely above the ellipsoid bottom plus
-        // just barely outside the ellipsoid (1.0036 instead of 1.0): that one
-        // trunk node got killed, and markPruned then recursively wiped its
-        // entire subtree, including everything above it. Whole-tree-disappears.
-        if (c.isTrunk) { prune(c); continue; }
-        if (c.pos.y < cy - ry) { prune(c); continue; }
-        if (!inside(c)) {
-          markPruned(c);
-          n.children.splice(i, 1);
-        } else {
-          prune(c);
-        }
-      }
-    };
-    prune(root);
-  }
-
-  // Weber-Penn parametric radii (top-down). Trunk tapers baseRadius→tipRadius
-  // along its height; each side branch's base is parent-local radius × the
-  // level's radiusRatio, and tapers to tipRadius over its own length. Adding a
-  // new branch level doesn't disturb existing radii — each chain's base is
-  // sampled once from its parent at spawn time.
-  // baseRadius scales with trunkHeight so species variety works without
-  // every preset specifying a value. At reference height 10 the slider maps
-  // 1:1 to world units; taller/shorter trees scale proportionally.
-  const baseR = (P.baseRadius ?? 0.35) * ((P.trunkHeight ?? 10) / 10);
-  const tipR = P.tipRadius;
-  const taperExp = P.taperExp ?? 1.6;
-  root.radius = baseR;
-  root.chainBaseR = baseR;
-  for (const n of nodes) {
-    if (n === root) continue;
-    const parent = n.parent;
-    if (n.chainRoot) {
-      // Branch start — base scales from parent's LOCAL radius at spawn.
-      const parentR = parent ? (parent.radius || tipR) : baseR;
-      const L = P.levels[n.branchLevel ?? 0];
-      const ratio = (L && L.radiusRatio != null) ? L.radiusRatio : 0.6;
-      n.chainBaseR = Math.max(tipR, parentR * ratio);
-      n.radius = n.chainBaseR;
-    } else {
-      // Walk node — interpolate along its own chain base→tip.
-      const chainBase = (parent && parent.chainBaseR != null) ? parent.chainBaseR : baseR;
-      const t = Math.max(0, Math.min(1, n.branchT ?? 1));
-      const k = Math.pow(1 - t, taperExp);
-      n.radius = tipR + (chainBase - tipR) * k;
-      n.chainBaseR = chainBase;
-    }
-  }
-
-  // Global branch-thickness multiplier — scales every node's radius uniformly
-  // after the allometric pipe-model computation. A single dial for overall
-  // tree weight / compensates thinning from density-curve culling.
-  const bT = P.branchThickness ?? 1;
-  if (Math.abs(bT - 1) > 1e-4) {
-    for (const n of nodes) n.radius *= bT;
-  }
-
-  // Weber-Penn per-level Taper: reshape the radius profile within each branch.
-  //   taper < 1 → tend to cylinder (mid segment stays thick)
-  //   taper = 1 → linear (default, no change)
-  //   taper ≤ 2 → cone / sharp cone (narrows faster toward tip)
-  //   taper > 2 → periodic (oscillating radius — aesthetic effect)
-  for (const n of nodes) {
-    if (n.branchT === undefined || n.branchLevel === undefined) continue;
-    const L = P.levels[n.branchLevel];
-    if (!L) continue;
-    const taper = L.taper ?? 1;
-    if (Math.abs(taper - 1) < 0.01) continue;
-    const t = n.branchT;
-    let profile;
-    if (taper < 1) {
-      profile = 1 - taper * t * t;
-    } else if (taper <= 2) {
-      profile = Math.pow(Math.max(0, 1 - t), taper);
-    } else {
-      const period = (taper - 2) * 1.5;
-      profile = Math.max(0.1, 0.5 + 0.5 * Math.cos(t * Math.PI * 2 * period));
-    }
-    const linear = Math.max(0.05, 1 - t);
-    const ratio = profile / linear;
-    n.radius *= Math.max(0.3, Math.min(2.5, ratio));
-  }
-
-  // Single pass: apply root-flare AND find maxY in one loop.
-  // Spread the flare over ~4m with a smooth arch curve (ease-out cubic) so
-  // the trunk bells out gradually instead of mushrooming right at the base.
-  let maxY = 0;
-  const rootFlare = P.rootFlare;
-  const flareH = 3.8;
-  // Bias factor halves the actual flare strength so default rootFlare=1
-  // gives a natural ~1.4× buttress instead of doubling the trunk base.
-  // Per-species rootFlare values were tuned with this softer effect in mind
-  // — bumping the slider to 2.0 reproduces the old behavior.
-  const FLARE_BIAS = 0.5;
-  for (const n of nodes) {
-    const y = n.pos.y;
-    if (y < flareH) {
-      const u = 1 - y / flareH;
-      const eased = u * u * (3 - 2 * u);
-      n.radius *= 1 + rootFlare * eased * FLARE_BIAS;
-    }
-    if (y > maxY) maxY = y;
-  }
-  // Second pass: trunk-scale taper (depends on maxY, can't fuse with above).
-  const invMax = maxY > 0 ? 1 / maxY : 0;
-  const trunkScaleAmt = P.trunkScale - 1;
-  if (trunkScaleAmt !== 0) {
-    for (const n of nodes) {
-      const tY = n.pos.y * invMax;
-      const tClamp = tY < 0 ? 0 : (tY > 1 ? 1 : tY);
-      n.radius *= 1 + trunkScaleAmt * (1 - tClamp);
-    }
-  }
-
-  // Gravity sag — MTree-style post-pass. Mirror in tree-worker.js.
-  // Scrub-skip: during a slider drag the user only needs a coarse preview;
-  // sag is the heaviest post-pass on big trees (~30-50ms at 10k nodes).
-  // Drag-end triggers a full rebuild that re-applies sag.
-  if (!isScrubbing) _applyGravitySag(root, nodes, P);
-
-  // Branch wobble — SpeedTree-style "wood noise" applied to skeleton node
-  // positions. Branches anchor to these nodes so the wobble propagates to
-  // every level naturally (no parent-branch disconnect). Per-level wobble
-  // overrides: P.levels[lvl].wobble > 0 replaces the global at that level.
-  _applyBranchWobble(root, nodes, P);
-
-  return root;
-}
-
-// Skeleton-level lateral perturbation. For each non-root node, samples
-// world-position 3D noise to build two orthogonal channels in the local
-// perpendicular plane (perp to parent→node direction). Magnitude scales
-// 1/√radius so twigs flex while trunks barely shift. Per-level override
-// (P.levels[lvl].wobble > 0) takes precedence over the global value.
-function _applyBranchWobble(root, nodes, P) {
-  const globalAmt  = P.branchWobble ?? 0;
-  const globalFreq = P.branchWobbleFreq ?? 2.0;
-  // Quick check — if global is 0 AND no per-level override is set, skip.
-  let anyLevelOverride = false;
-  if (Array.isArray(P.levels)) {
-    for (const L of P.levels) if (L && (L.wobble ?? 0) > 0) { anyLevelOverride = true; break; }
-  }
-  if (!(globalAmt > 0) && !anyLevelOverride) return;
-  const N = nodes.length;
-  if (N < 2) return;
-  // Snapshot positions so a parent's wobble doesn't bias its child's
-  // perpendicular basis (we offset against the original parent→child edge).
-  const oX = new Float32Array(N), oY = new Float32Array(N), oZ = new Float32Array(N);
-  for (let i = 0; i < N; i++) {
-    const n = nodes[i]; n.idx = i;
-    oX[i] = n.pos.x; oY[i] = n.pos.y; oZ[i] = n.pos.z;
-  }
-  // Pass 1 — non-chainRoot nodes wobble independently. Walking nodes in
-  // topo order (parents before children) ensures every node's parent has
-  // already had its offset applied by the time we read parent.pos.
-  for (let i = 0; i < N; i++) {
-    const n = nodes[i];
-    const p = n.parent;
-    if (!p || n.chainRoot) continue;
-    const lvl = n.branchLevel;
-    const Lvl = (lvl !== undefined && P.levels[lvl]) ? P.levels[lvl] : null;
-    const lvlAmt  = Lvl && (Lvl.wobble     ?? 0) > 0 ? Lvl.wobble     : globalAmt;
-    const lvlFreq = Lvl && (Lvl.wobbleFreq ?? 0) > 0 ? Lvl.wobbleFreq : globalFreq;
-    if (!(lvlAmt > 0)) continue;
-    const pi = p.idx;
-    const ex = oX[i] - oX[pi];
-    const ey = oY[i] - oY[pi];
-    const ez = oZ[i] - oZ[pi];
-    const eL = Math.hypot(ex, ey, ez);
-    if (eL < 1e-6) continue;
-    const tx = ex / eL, ty = ey / eL, tz = ez / eL;
-    let upX = 0, upY = 1, upZ = 0;
-    if (ty > 0.97 || ty < -0.97) { upX = 1; upY = 0; upZ = 0; }
-    const dotUp = tx * upX + ty * upY + tz * upZ;
-    let ax = upX - tx * dotUp;
-    let ay = upY - ty * dotUp;
-    let az = upZ - tz * dotUp;
-    const am = Math.hypot(ax, ay, az) || 1;
-    ax /= am; ay /= am; az /= am;
-    const bx = ty * az - tz * ay;
-    const by = tz * ax - tx * az;
-    const bz = tx * ay - ty * ax;
-    const fSc = lvlFreq * 0.3;
-    const wxN = oX[i] * fSc, wyN = oY[i] * fSc, wzN = oZ[i] * fSc;
-    const n1 = fbm3D(wxN,        wyN,        wzN       ) * 2 - 1;
-    const n2 = fbm3D(wxN + 47.3, wyN + 13.7, wzN + 91.1) * 2 - 1;
-    const lvlIdx = (lvl ?? 0);
-    const depthScale = 0.6 + lvlIdx * 0.35;
-    let wMul = lvlAmt * depthScale * 0.12;
-    // Trunk nodes near the floor must NOT wobble — otherwise the chain's
-    // first node drifts off the y-axis, the CatmullRom tangent at root
-    // tilts, and the bottom tube ring lifts off the ground. Smooth ramp:
-    // 0 at trunk base, full by 15 % of trunkHeight. Branch nodes
-    // (branchLevel set / not isTrunk) wobble at full strength as before.
-    if (n.isTrunk || n.branchLevel === undefined) {
-      const yFrac = oY[i] / Math.max(0.1, P.trunkHeight ?? 10);
-      const _u = Math.max(0, Math.min(1, yFrac / 0.15));
-      wMul *= _u * _u * (3 - 2 * _u);
-    }
-    n.pos.x += (ax * n1 + bx * n2) * wMul;
-    n.pos.y += (ay * n1 + by * n2) * wMul;
-    n.pos.z += (az * n1 + bz * n2) * wMul;
-  }
-  // Pass 2 — chainRoot nodes inherit their tree-parent's offset exactly.
-  // Without this, a branch spawned at an interpolated position between two
-  // parent-chain nodes computes its own noise sample at the midpoint, which
-  // doesn't match the parent's CR-curve surface at the same t. Using the
-  // parent's offset preserves the original parent-to-chainRoot edge vector,
-  // so the branch base sits flush against its parent's wobbled surface.
-  for (let i = 0; i < N; i++) {
-    const n = nodes[i];
-    if (!n.chainRoot || !n.parent) continue;
-    const pi = n.parent.idx;
-    n.pos.x = oX[i] + (n.parent.pos.x - oX[pi]);
-    n.pos.y = oY[i] + (n.parent.pos.y - oY[pi]);
-    n.pos.z = oZ[i] + (n.parent.pos.z - oZ[pi]);
-  }
-}
-
-// Recursive weight accumulation + cumulative rotation cascade. Walks parent-
-// before-child topo order (which buildTree already guarantees: walkInternode
-// pushes children only after the parent). At each non-root node we compute
-// a small rotation about (tangent × -Y) whose magnitude scales with
-// horizontality × √(downstream weight) × gravityStrength, damped by node
-// thickness × stiffness. The rotation accumulates down the chain so an
-// entire heavy subtree pivots as one piece, just like a real branch.
-function _applyGravitySag(root, nodes, P) {
-  const gravity = P.gravityStrength ?? 0;
-  if (!(gravity > 0)) return;
-  const stiffness = Math.max(0, P.gravityStiffness ?? 0.5);
-  const N = nodes.length;
-  if (N < 2) return;
-  // Snapshot positions; assign tentative idx (main re-stamps later).
-  const oX = new Float32Array(N), oY = new Float32Array(N), oZ = new Float32Array(N);
-  for (let i = 0; i < N; i++) {
-    const n = nodes[i]; n.idx = i;
-    oX[i] = n.pos.x; oY[i] = n.pos.y; oZ[i] = n.pos.z;
-  }
-  // Self segment-weighted contribution (length × radius²) — a stand-in for
-  // wood mass plus the foliage mass it supports, monotone with both.
-  const sagW = new Float32Array(N);
-  for (let i = 0; i < N; i++) {
-    const n = nodes[i], p = n.parent;
-    if (!p) continue;
-    const pi = p.idx;
-    const dx = oX[i] - oX[pi], dy = oY[i] - oY[pi], dz = oZ[i] - oZ[pi];
-    const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    const r = n.radius || 0.01;
-    sagW[i] = len * r * r;
-  }
-  // Reverse propagate child weight up — topo order means all children of
-  // node i appear after i, so a single reverse pass suffices.
-  for (let i = N - 1; i >= 0; i--) {
-    const p = nodes[i].parent;
-    if (p) sagW[p.idx] += sagW[i];
-  }
-  // Cumulative rotation cascade. accQ[i] is the rotation that should be
-  // applied to a child's offset relative to node i.
-  const qX = new Float32Array(N), qY = new Float32Array(N);
-  const qZ = new Float32Array(N), qW = new Float32Array(N);
-  qW[root.idx] = 1;
-  for (let i = 0; i < N; i++) {
-    const n = nodes[i], p = n.parent;
-    if (!p) continue;
-    const pi = p.idx;
-    let rx = oX[i] - oX[pi], ry = oY[i] - oY[pi], rz = oZ[i] - oZ[pi];
-    const pqx = qX[pi], pqy = qY[pi], pqz = qZ[pi], pqw = qW[pi];
-    // Rotate offset by parent's accumulated quaternion.
-    const tx = 2 * (pqy * rz - pqz * ry);
-    const ty = 2 * (pqz * rx - pqx * rz);
-    const tz = 2 * (pqx * ry - pqy * rx);
-    const newRx = rx + pqw * tx + (pqy * tz - pqz * ty);
-    const newRy = ry + pqw * ty + (pqz * tx - pqx * tz);
-    const newRz = rz + pqw * tz + (pqx * ty - pqy * tx);
-    n.pos.set(p.pos.x + newRx, p.pos.y + newRy, p.pos.z + newRz);
-    // Local sag at this joint.
-    const tlen = Math.sqrt(newRx*newRx + newRy*newRy + newRz*newRz);
-    let lqx = 0, lqy = 0, lqz = 0, lqw = 1;
-    if (tlen > 1e-6) {
-      const tnx = newRx / tlen, tnz = newRz / tlen;
-      // axis = cross(tangent, -Y) = (tnz, 0, -tnx)
-      const aLen = Math.sqrt(tnx*tnx + tnz*tnz);
-      if (aLen > 1e-5) {
-        const r = n.radius || 0.01;
-        const stiff = stiffness * (r / 0.04);
-        let theta = aLen * Math.sqrt(sagW[i]) * gravity * 0.015 / (1 + stiff * 4);
-        if (theta > 0.5) theta = 0.5;
-        const half = theta * 0.5;
-        const s = Math.sin(half), c = Math.cos(half), inv = 1 / aLen;
-        lqx = tnz * inv * s;  // axis.x = tnz
-        lqz = -tnx * inv * s; // axis.z = -tnx
-        lqw = c;
-      }
-    }
-    // accQ[i] = lq * pq (Hamilton): apply pq first, then lq.
-    qX[i] = lqw * pqx + pqw * lqx + (lqy * pqz - lqz * pqy);
-    qY[i] = lqw * pqy + pqw * lqy + (lqz * pqx - lqx * pqz);
-    qZ[i] = lqw * pqz + pqw * lqz + (lqx * pqy - lqy * pqx);
-    qW[i] = lqw * pqw - (lqx * pqx + lqy * pqy + lqz * pqz);
-  }
-}
-
-function buildChains(root) {
-  // A "chain" is the longest continuation-only path. Only chainRoot-flagged
-  // children (lateral branches spawned by spawnChildrenAlong) start new
-  // chains; non-chainRoot children extend the current chain. Result: the
-  // trunk is ONE unbroken spline from root → top, swept with a single
-  // circle profile → clean quad topology with continuous UVs and no seams
-  // between branch insertion points. Branches stay independent tubes.
-  const chains = [];
-  const stack = [root];
-  while (stack.length) {
-    const start = stack.pop();
-    if (start.pruned) continue;
-    const chain = [start];
-    let cur = start;
-    while (cur.children.length > 0) {
-      let contChild = null;
-      for (const c of cur.children) {
-        if (c.pruned) continue;
-        if (c.chainRoot) {
-          stack.push(c);           // lateral branch → new chain
-        } else if (!contChild) {
-          contChild = c;           // this chain's continuation
-        } else {
-          stack.push(c);           // extra sibling (multi-trunk split) → own chain
-        }
-      }
-      if (!contChild) break;
-      chain.push(contChild);
-      cur = contChild;
-    }
-    if (chain.length >= 2) chains.push(chain);
-  }
-  return chains;
-}
-
-const _tubeCenter = new THREE.Vector3();
-const _tubeTangent = new THREE.Vector3();
-
-// Outward vertex normals via central differences on the written position grid.
-// Replaces geo.computeVertexNormals() — one linear pass, no index walk, no
-// triangle-face averaging. Matches computeVertexNormals numerically on smooth
-// surfaces and carries the bump shading of displaced bark. Wraps the seam at
-// k=0..radial so both seam copies share one normal.
-function _tubeAnalyticNormals(posArr, normArr, tubular, radial) {
-  const radial1 = radial + 1;
-  const stride = radial1 * 3;
-  for (let u = 0; u <= tubular; u++) {
-    const uP = u > 0 ? u - 1 : u;
-    const uN = u < tubular ? u + 1 : u;
-    const rowP = uP * stride;
-    const rowN = uN * stride;
-    const row  = u * stride;
-    for (let k = 0; k <= radial; k++) {
-      const kk = k === radial ? 0 : k;
-      const kN = (kk + 1) % radial;
-      const kP = (kk - 1 + radial) % radial;
-      const ip3 = row + kP * 3;
-      const in3 = row + kN * 3;
-      const jp3 = rowP + kk * 3;
-      const jn3 = rowN + kk * 3;
-      const dux = posArr[jn3    ] - posArr[jp3    ];
-      const duy = posArr[jn3 + 1] - posArr[jp3 + 1];
-      const duz = posArr[jn3 + 2] - posArr[jp3 + 2];
-      const dvx = posArr[in3    ] - posArr[ip3    ];
-      const dvy = posArr[in3 + 1] - posArr[ip3 + 1];
-      const dvz = posArr[in3 + 2] - posArr[ip3 + 2];
-      let nx = duy * dvz - duz * dvy;
-      let ny = duz * dvx - dux * dvz;
-      let nz = dux * dvy - duy * dvx;
-      const m = Math.hypot(nx, ny, nz);
-      if (m > 1e-8) { const inv = 1 / m; nx *= inv; ny *= inv; nz *= inv; }
-      else { nx = 0; ny = 1; nz = 0; }
-      const o = row + k * 3;
-      normArr[o    ] = nx;
-      normArr[o + 1] = ny;
-      normArr[o + 2] = nz;
-    }
-  }
-}
-
+// buildTree + tubeFromChain were huge near-duplicates of the worker's
+// versions. They now route through growth-engine.js — see _treeBuilder
+// at the top of the file. main.js's only remaining job at the call sites
+// is to convert TNode chains into POJO chains for buildTube and supply the
+// per-call `displace` options object the engine needs.
 function tubeFromChain(chain) {
   if (!chain || chain.length < 2) return null;
-  // Drop coincident consecutive pts. CatmullRomCurve3 on zero-length segments
-  // divides by zero in getUtoTmapping → getPoint(NaN) → "undefined.x" crash
-  // in computeFrenetFrames. Also cap tubular subdivisions so a huge chain
-  // can't blow Float32Array allocation inside mergeGeometries.
-  const rawPts = chain.map((n) => n.pos);
-  const pts = [rawPts[0]];
-  const kept = [0];
-  const EPS2 = 1e-12;
-  for (let i = 1; i < rawPts.length; i++) {
-    const a = pts[pts.length - 1], b = rawPts[i];
-    const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
-    if (dx*dx + dy*dy + dz*dz > EPS2) { pts.push(b); kept.push(i); }
+  const chainPOJOs = new Array(chain.length);
+  for (let i = 0; i < chain.length; i++) {
+    const n = chain[i];
+    chainPOJOs[i] = { x: n.pos.x, y: n.pos.y, z: n.pos.z, radius: n.radius, idx: n.idx };
   }
-  if (pts.length < 2) return null;
-  const r0 = chain[kept[0]].radius;
-  // Branch junction fuse: flare collar only. The per-chain-node radius
-  // sampling + cap-and-scale elsewhere already makes the branch base equal
-  // to the parent's local radius, so the extra backward curve pad isn't
-  // needed and was causing poke-through on the far side of thin parents.
   const isBranch = !!chain[0].chainRoot;
-  const parentRad = isBranch && chain[0].parent ? (chain[0].parent.radius || 0) : 0;
-  const flareRatio = (isBranch && parentRad > r0 * 1.05)
-    ? Math.min(6, parentRad / Math.max(0.004, r0))
-    : 1;
-  const flareEnd = 0.22;
-  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5);
-  // Halve longitudinal + radial detail while dragging sliders so the live
-  // preview runs fast. On drag end a full-quality rebuild fires automatically.
-  // Match the slider range. Keep both clamps strict so a malformed preset
-  // (or older save) can't push the values into the unstable region.
-  const tubularPerStep = Math.max(4, Math.min(10, P.barkTubularDensity ?? 6));
-  // Cap raised 384 → 768. Long trunks with many skeleton subdivisions × high
-  // mesh smoothness used to truncate at 384, which created a visible polycount
-  // discontinuity between the unclamped twigs and the clamped trunk.
-  const fullTub = Math.min(768, Math.max(12, (pts.length - 1) * tubularPerStep));
-  const baseRad = Math.max(8, Math.min(24, P.barkRadialSegs ?? 16));
-  // Twigs (root radius < 0.3 m) auto-halve sides since their silhouette is
-  // dominated by the bark normal map at typical distance, never by the
-  // polygon count. Capped at 4 minimum so even an 8-side trunk yields a
-  // sane 4-side twig.
-  const fullRad = r0 > 0.3 ? baseRad : Math.max(4, baseRad >> 1);
-  // Trunk chain detection — needed before the scrub-downsize gate so the
-  // user can drag Mesh sides / Mesh smoothness / Skeleton subdivisions and
-  // see the actual result, not a quartered preview.
-  const isTrunkChain = (() => {
-    for (const n of chain) if (n.branchLevel !== undefined) return false;
-    return true;
-  })();
-  // Aggressive scrub detail: slider drags rebuild ~7×/s — quarter-res keeps
-  // the preview responsive on big trees. Drag-end triggers a full rebuild.
-  // Trunk chains skip the downsize: dragging a trunk subdivision slider with
-  // a quartered preview is misleading because the user can't see what their
-  // actual setting produces. Branches stay quartered (still hundreds of
-  // chains, dominant cost on big trees).
-  const tubular = (isScrubbing && !isTrunkChain) ? Math.max(4, Math.floor(fullTub * 0.28)) : fullTub;
-  const radial  = (isScrubbing && !isTrunkChain) ? Math.max(4, Math.floor(fullRad * 0.5))  : fullRad;
-  const geo = new THREE.TubeGeometry(curve, tubular, r0, radial, false);
-  const pos = geo.attributes.position;
-  const arr = pos.array;
-  // Per-radial profile multipliers (cached per loop)
-  const radial1 = radial + 1;
-  const profileMul = new Array(radial1);
-  const hasProfile = !!profileEditor;
-  const twoPi = Math.PI * 2;
-  for (let j = 0; j <= radial; j++) {
-    profileMul[j] = hasProfile ? profileEditor.sample((j / radial) * twoPi) : 1;
-  }
-  const invR0 = 1 / r0;
-  const invTubular = 1 / tubular;
-  // Procedural mesh displacer — radial noise on each vertex so the trunk and
-  // branches look gnarly instead of perfectly extruded. Mode picks the noise
-  // flavor; knots/detail layer on independently.
-  const barkDisplace    = P.barkDisplace ?? 0;
-  const barkDispFreq    = P.barkDisplaceFreq ?? 3.0;
-  const barkDispMode    = P.barkDisplaceMode ?? 'ridges';
-  const barkRidgeSharp  = P.barkRidgeSharp ?? 0.5;
-  const barkKnots       = P.barkKnots ?? 0;
-  const barkKnotScale   = P.barkKnotScale ?? 2.0;
-  const barkDetail      = P.barkDetail ?? 0;
-  const barkDetailFreq  = P.barkDetailFreq ?? 12.0;
-  const barkVertBias    = P.barkVerticalBias ?? 0.7;
-  const hasDisplace = barkDisplace > 1e-4 || barkKnots > 1e-4 || barkDetail > 1e-4;
-  // Branch wobble is applied at SKELETON BUILD TIME now — see
-  // _applyBranchWobble in buildTree. Was previously here at extrusion time
-  // but that broke branch attachment: tube rings shift, but the chain nodes
-  // they anchor to don't, so branches disconnected from their parents.
-  // Skeleton-level wobble propagates through buildChains → branches inherit.
-  // Arc-length in meters — makes the axial noise coord invariant to chain
-  // orientation (branches at any angle share the same bark density).
-  const curveLenForDisp = hasDisplace ? curve.getLength() : 0;
-  // Precompute taper samples once per row instead of per vertex.
-  // (isTrunkChain is computed earlier so the scrub-downsize gate can read
-  // it; Radius Curve / buttress / etc. below also rely on it.)
-  const taperRow = new Float32Array(tubular + 1);
-  const hasTaper = !!taperSpline && isTrunkChain;
-  if (hasTaper) {
-    for (let i = 0; i <= tubular; i++) taperRow[i] = taperSpline.sample(i * invTubular);
-  } else {
-    taperRow.fill(1);
-  }
-  // Buttress / root flare — angular lobes at the base of the tree. Only
-  // applies to chains whose first node is the root (trunk chain).
-  const buttressAmt = P.buttressAmount ?? 0;
-  const buttressH = P.buttressHeight ?? 1.5;
-  const buttressLobes = P.buttressLobes ?? 5;
-  const hasButtress = buttressAmt > 0 && isTrunkChain && buttressH > 0;
-  // Reaction wood — horizontal branches thicken on compression side (underside)
-  // as gravitropic response. Strength scales with tilt: 0 vertical → 1 horizontal.
-  const reactAmt = P.reactionWood ?? 0;
-  let chainTilt = 0;
-  if (reactAmt > 0 && chain.length >= 2) {
-    const a = chain[0].pos, b = chain[chain.length - 1].pos;
-    const dy = b.y - a.y;
-    const cl = Math.hypot(b.x - a.x, dy, b.z - a.z) || 1;
-    chainTilt = Math.max(0, 1 - Math.abs(dy) / cl);
-  }
-  const hasReact = reactAmt * chainTilt > 0.01;
-  // Per-node radius sampling: each chain node carries its own allometric
-  // radius. Linearly interpolating only r0→r1 made the parent tube thicker
-  // than its chain nodes actually were at mid-points, and branches spawning
-  // there had matching-radius *mismatches*. We now interpolate between every
-  // chain node's radius along the tube — this makes the trunk taper exactly
-  // to each chain node's computed radius and guarantees a branch spawning
-  // at chain[k] has its base (sized to chain[k].radius) equal to the parent
-  // tube's local radius at that position.
-  const chainRadii = chain.map((n) => Math.max(1e-4, n.radius || r0));
-  // Cap branch base at 80 % of parent's local radius and shrink descendants
-  // proportionally. Prevents a branch from being fatter than its parent at
-  // the spawn point — the cause of the "branches poke through trunk" look
-  // when the parent has tapered thinner than the branch's own allometric.
-  if (isBranch && parentRad > 0) {
-    const cap = parentRad * 0.8;
-    if (chainRadii[0] > cap) {
-      const s = cap / chainRadii[0];
-      for (let k = 0; k < chainRadii.length; k++) chainRadii[k] *= s;
-    }
-  }
-  const lastChainIdx = chain.length - 1;
-  for (let i = 0; i <= tubular; i++) {
-    const t = i * invTubular;
-    // Interpolate chain nodes' individual radii, not just r0→r1.
-    const cfp = t * lastChainIdx;
-    const cI0 = Math.max(0, Math.min(lastChainIdx, Math.floor(cfp)));
-    const cI1 = Math.min(lastChainIdx, cI0 + 1);
-    const cU = cfp - cI0;
-    const localR = chainRadii[cI0] * (1 - cU) + chainRadii[cI1] * cU;
-    const baseScl = localR * invR0;
-    const splMul = taperRow[i];
-    curve.getPointAt(t, _tubeCenter);
-    const cx = _tubeCenter.x, cy = _tubeCenter.y, cz = _tubeCenter.z;
-    const rowBase = i * radial1 * 3;
-    const buttressH_here = hasButtress && cy < buttressH ? Math.max(0, 1 - cy / buttressH) : 0;
-    // Base flare — starts at flareRatio (matches parent radius) at t=0 and
-    // eases down to 1 (branch radius) by flareEnd. Smoothstep easing.
-    let flareMul = 1;
-    if (flareRatio > 1 && t < flareEnd) {
-      const k = t / flareEnd;
-      const s = k * k * (3 - 2 * k); // smoothstep
-      flareMul = flareRatio * (1 - s) + 1 * s;
-    }
-    for (let j = 0; j <= radial; j++) {
-      const o = rowBase + j * 3;
-      let scl = baseScl * splMul * profileMul[j] * flareMul;
-      if (hasDisplace) {
-        // World-space noise coords. Radial unit vector (3D) + arc-length
-        // along the branch in meters. Axial is injected as a uniform
-        // offset to all three coords so it shifts the noise along the
-        // *branch direction* rather than a world axis — this makes the
-        // pattern flow along trunks and branches at any orientation, with
-        // no Frenet spiral and no cylindrical seam.
-        const rx = arr[o] - cx;
-        const ry = arr[o + 1] - cy;
-        const rz = arr[o + 2] - cz;
-        const rInv = 1 / (Math.hypot(rx, ry, rz) || 1);
-        const rux = rx * rInv, ruy = ry * rInv, ruz = rz * rInv;
-        const sAxial = t * curveLenForDisp;
-        const fAx = barkDispFreq;
-        const fRad = barkDispFreq * Math.PI;
-        // Axial offset — scalar added equally to all 3 coords. Scale chosen
-        // so 1 m of axial travel ≈ similar noise-step to rotating ~30° around.
-        const axOff = sAxial * fAx * 0.35;
-        let d = 0;
-        if (barkDisplace > 1e-4) {
-          // Compute ONLY the noise channels each mode actually consumes.
-          let nMix = 0;
-          if (barkDispMode === 'cellular') {
-            const wN = worley3D(rux * fRad * 0.8 + axOff, ruy * fRad * 0.8 + axOff, ruz * fRad * 0.8 + axOff);
-            nMix = 1 - Math.min(1, wN * 1.6);
-          } else {
-            const sharpen = (x) => {
-              if (barkRidgeSharp < 1e-3) return x;
-              const s = Math.min(1, barkRidgeSharp);
-              const r = 1 - Math.abs(x);
-              return (1 - s) * x + s * (r * 2 - 1);
-            };
-            const nBlob = fbm3D(rux * fRad + axOff, ruy * fRad + axOff, ruz * fRad + axOff);
-            if (barkDispMode === 'blobby') {
-              nMix = sharpen(nBlob);
-            } else if (barkDispMode === 'mixed') {
-              const axV = sAxial * fAx * 0.12;
-              const nVert = fbm3D(rux * fRad * 2.2 + axV, ruy * fRad * 2.2 + axV, ruz * fRad * 2.2 + axV);
-              const wN = worley3D(rux * fRad * 0.8 + axOff, ruy * fRad * 0.8 + axOff, ruz * fRad * 0.8 + axOff);
-              const nCell = 1 - Math.min(1, wN * 1.6);
-              const nR = (1 - barkVertBias) * nBlob + barkVertBias * nVert;
-              nMix = sharpen(nR) * 0.55 + nCell * 0.45;
-            } else {
-              // 'ridges' default
-              const axV = sAxial * fAx * 0.12;
-              const nVert = fbm3D(rux * fRad * 2.2 + axV, ruy * fRad * 2.2 + axV, ruz * fRad * 2.2 + axV);
-              const nR = (1 - barkVertBias) * nBlob + barkVertBias * nVert;
-              nMix = sharpen(nR);
-            }
-          }
-          d += nMix * barkDisplace * 0.35;
-        }
-        if (barkKnots > 1e-4) {
-          const kAx = sAxial * barkKnotScale * 0.2;
-          const kW = worley3D(rux * barkKnotScale * 1.4 + kAx, ruy * barkKnotScale * 1.4 + kAx, ruz * barkKnotScale * 1.4 + kAx);
-          const knot = Math.max(0, 1 - kW * 2.4);
-          d += knot * knot * barkKnots * 0.45;
-        }
-        if (barkDetail > 1e-4) {
-          const dAx = sAxial * barkDetailFreq * 0.3;
-          const det = fbm3D(rux * barkDetailFreq + dAx, ruy * barkDetailFreq + dAx, ruz * barkDetailFreq + dAx);
-          d += det * barkDetail * 0.12;
-        }
-        scl *= 1 + d;
-      }
-      if (buttressH_here > 0) {
-        const ang = (j / radial) * twoPi;
-        const lobe = Math.max(0, Math.cos(ang * buttressLobes));
-        scl *= 1 + buttressAmt * buttressH_here * lobe * lobe;
-      }
-      if (hasReact) {
-        // Underside = radial vertex below the chain centerline (in world Y).
-        const radialY = arr[o + 1] - cy;
-        const under = radialY < 0 ? Math.min(1, -radialY / Math.max(1e-5, r0)) : 0;
-        scl *= 1 + reactAmt * chainTilt * under * 0.45;
-      }
-      arr[o    ] = (arr[o    ] - cx) * scl + cx;
-      arr[o + 1] = (arr[o + 1] - cy) * scl + cy;
-      arr[o + 2] = (arr[o + 2] - cz) * scl + cz;
-    }
-  }
-  pos.needsUpdate = true;
-  // Normals via analytic central differences on the displaced grid — see
-  // _tubeAnalyticNormals. computeVertexNormals would walk the index buffer
-  // and face-average; this is strictly faster on the parametric tube.
-
-  // Rewrite UVs in world METERS on both axes. TubeGeometry defaults to a
-  // flat [0,1]×[0,1] square per tube, which stretches bark across long trunks
-  // and squashes it on short twigs. Writing meters + `texture.repeat = tiles
-  // per meter` gives consistent bark density everywhere, and since uv.x
-  // varies with `i` (along) and uv.y with `j` (around), the texture tiles in
-  // both directions — no more uniform stripes around the cylinder.
-  {
-    const curveLen = curve.getLength();
-    const uvAttr = geo.attributes.uv;
-    if (uvAttr) {
-      const uvArr = uvAttr.array;
-      const twoPiLoc = Math.PI * 2;
-      // Snap the around-tube UV span ONCE per tube (using the max radius
-      // along the chain) so every ring wraps the bark canvas the same
-      // integer number of tiles. Per-ring snapping (the previous attempt)
-      // produced visible horizontal banding wherever a tile-count step
-      // landed (e.g. a 4-tile ring next to a 3-tile ring left a hard line).
-      // With a constant tile count, texture density varies smoothly along
-      // the tube (more stretch on the trunk base, less on twigs) and the
-      // seam vertex always lands on an integer texel boundary — clean wrap.
-      const sv = P.barkTexScaleV ?? 0.5;
-      let maxR = 0;
-      for (let k = 0; k < chainRadii.length; k++) if (chainRadii[k] > maxR) maxR = chainRadii[k];
-      const tubeCircumMax = twoPiLoc * Math.max(0.002, maxR);
-      const tilesAround = Math.max(1, Math.round(tubeCircumMax * sv));
-      const seamCircum = tilesAround / sv; // CONSTANT for whole tube
-      for (let i = 0; i <= tubular; i++) {
-        const ti = i * invTubular;
-        const sAlong = ti * curveLen;
-        for (let j = 0; j <= radial; j++) {
-          const sAround = (j / radial) * seamCircum;
-          const idx = (i * radial1 + j) * 2;
-          uvArr[idx    ] = sAlong;   // uv.x = meters ALONG the tube
-          uvArr[idx + 1] = sAround;  // uv.y = constant-tile UV AROUND
-        }
-      }
-      uvAttr.needsUpdate = true;
-    }
-  }
-
-  // Per-vertex skeleton mapping + rest radial vector, folded into one pass.
-  // Both derive from the same (kept segA, segB, w) triple, so interleaving
-  // them saves a full bark-vertex re-walk on the main thread. radialRest is
-  // the rest radial vector from the LINEAR skeleton centerline (not the
-  // Catmull-Rom curve) — that's what updateBark() uses each frame.
-  const numVerts = (tubular + 1) * radial1;
-  const nodeA = new Int32Array(numVerts);
-  const nodeB = new Int32Array(numVerts);
-  const nodeW = new Float32Array(numVerts);
-  const radialRest = new Float32Array(numVerts * 3);
-  const posArrLive = geo.attributes.position.array;
-  const lastSeg = pts.length - 1;
-  for (let i = 0; i <= tubular; i++) {
-    const cp = (i * invTubular) * lastSeg;
-    const a = Math.min(Math.floor(cp), lastSeg);
-    const b = Math.min(a + 1, lastSeg);
-    const w = cp - a;
-    const iw = 1 - w;
-    const nAk = chain[kept[a]];
-    const nBk = chain[kept[b]];
-    const aIdx = nAk.idx, bIdx = nBk.idx;
-    const skCx = nAk.pos.x * iw + nBk.pos.x * w;
-    const skCy = nAk.pos.y * iw + nBk.pos.y * w;
-    const skCz = nAk.pos.z * iw + nBk.pos.z * w;
-    const rowBase = i * radial1;
-    for (let j = 0; j <= radial; j++) {
-      const vi = rowBase + j;
-      nodeA[vi] = aIdx;
-      nodeB[vi] = bIdx;
-      nodeW[vi] = w;
-      const o3 = vi * 3;
-      radialRest[o3    ] = posArrLive[o3    ] - skCx;
-      radialRest[o3 + 1] = posArrLive[o3 + 1] - skCy;
-      radialRest[o3 + 2] = posArrLive[o3 + 2] - skCz;
-    }
-  }
-
-  // Transfer-free output: fresh typed arrays for the sync-fallback path so
-  // the generateTree pool-fill can absorb them exactly like the worker
-  // returns. Normals are central-difference from posArr.
-  const posArr = new Float32Array(posArrLive);
-  const normArr = new Float32Array(numVerts * 3);
-  const uvArr = new Float32Array(geo.attributes.uv.array);
-  const idxSrc = geo.index ? geo.index.array : null;
-  const idxArr = idxSrc ? (idxSrc instanceof Uint32Array ? new Uint32Array(idxSrc) : new Uint16Array(idxSrc)) : null;
-  _tubeAnalyticNormals(posArr, normArr, tubular, radial);
-  geo.dispose();
-
-  return {
-    position: posArr,
-    normal: normArr,
-    uv: uvArr,
-    index: idxArr,
-    radialRest,
-    nodeA, nodeB, nodeW,
-    vertCount: numVerts,
+  const parentRadius = isBranch && chain[0].parent ? (chain[0].parent.radius || 0) : 0;
+  const displace = {
+    amount: P.barkDisplace ?? 0,
+    freq: P.barkDisplaceFreq ?? 3,
+    mode: P.barkDisplaceMode ?? 'ridges',
+    ridgeSharp: P.barkRidgeSharp ?? 0.5,
+    verticalBias: P.barkVerticalBias ?? 0.7,
+    knots: P.barkKnots ?? 0,
+    knotScale: P.barkKnotScale ?? 2.0,
+    detail: P.barkDetail ?? 0,
+    detailFreq: P.barkDetailFreq ?? 12.0,
+    buttressAmount: P.buttressAmount ?? 0,
+    buttressHeight: P.buttressHeight ?? 1.5,
+    buttressLobes: P.buttressLobes ?? 5,
+    reactionWood: P.reactionWood ?? 0,
+    radialSegs: P.barkRadialSegs ?? 16,
+    tubularDensity: P.barkTubularDensity ?? 6,
   };
+  return buildTube(
+    chainPOJOs,
+    profileEditor,
+    taperSpline,
+    isScrubbing,
+    displace,
+    isBranch,
+    parentRadius,
+    P.barkTexScaleV,
+  );
 }
 
 // --- Vines ---------------------------------------------------------------
@@ -6182,14 +4954,16 @@ let _barkPosPool = null;
 let _barkNormPool = null;
 let _barkUvPool = null;
 let _barkIndexPool = null;
+let _barkRadiusPool = null;  // per-vertex local radius — drives TSL bark sway weight
 let _barkIndexIs32 = false;
 function _ensureBarkPools(totalVerts, totalIdx) {
   const needP = totalVerts * 3;
   const needN = totalVerts * 3;
   const needU = totalVerts * 2;
-  if (!_barkPosPool  || _barkPosPool.length  < needP) _barkPosPool  = new Float32Array(needP);
-  if (!_barkNormPool || _barkNormPool.length < needN) _barkNormPool = new Float32Array(needN);
-  if (!_barkUvPool   || _barkUvPool.length   < needU) _barkUvPool   = new Float32Array(needU);
+  if (!_barkPosPool   || _barkPosPool.length   < needP) _barkPosPool   = new Float32Array(needP);
+  if (!_barkNormPool  || _barkNormPool.length  < needN) _barkNormPool  = new Float32Array(needN);
+  if (!_barkUvPool    || _barkUvPool.length    < needU) _barkUvPool    = new Float32Array(needU);
+  if (!_barkRadiusPool|| _barkRadiusPool.length< totalVerts) _barkRadiusPool = new Float32Array(totalVerts);
   if (!barkNodeA || barkNodeA.length < totalVerts) barkNodeA = new Int32Array(totalVerts);
   if (!barkNodeB || barkNodeB.length < totalVerts) barkNodeB = new Int32Array(totalVerts);
   if (!barkNodeW || barkNodeW.length < totalVerts) barkNodeW = new Float32Array(totalVerts);
@@ -7298,6 +6072,41 @@ function _hue2rgb(q, p, t) {
   return q;
 }
 
+// Per-leaf attach-radius (twig thickness at the leaf's anchor node) packaged as
+// an InstancedBufferAttribute named 'aLeafRadius'. TSL leaf wind reads it via
+// `attribute('aLeafRadius')` and scales amplitude as `1 - clamp(r/uMaxRadius)`
+// so thick interior leaves vibrate gently while thin tip leaves whip.
+// Reuses the existing buffer when leaf count fits — keeps the GC quiet during
+// scrubs that don't change total leaf count.
+function _attachLeafRadiusAttr(inst, data) {
+  if (!inst || !inst.geometry) return;
+  // Allocate at least MAX_FALLING slots — leafInstFall (and vineLeafInst)
+  // share `leafGeo` with leafInstA, so the same attribute buffer is bound
+  // for their draws. The trailing slots stay 0 (full sway), which is what
+  // we want for floating / decorative leaves anyway.
+  const minSlots = 400;
+  const count = Math.max(minSlots, data.length, 1);
+  let attr = inst.userData._leafRadiusAttr;
+  if (!attr || attr.array.length < count) {
+    attr = new THREE.InstancedBufferAttribute(new Float32Array(count), 1);
+    inst.userData._leafRadiusAttr = attr;
+  } else {
+    // Reusing — clear any stale tail past the new live range so the next
+    // foliage scrub doesn't read previous-build radii into the falling-leaf
+    // tail of the buffer.
+    attr.array.fill(0, data.length);
+  }
+  const arr = attr.array;
+  const haveSk = !!skRadius && skN > 0;
+  for (let i = 0; i < data.length; i++) {
+    const L = data[i];
+    const idx = L.anchorIdx;
+    arr[i] = (haveSk && idx >= 0 && idx < skN) ? Math.max(0, skRadius[idx] || 0) : 0;
+  }
+  attr.needsUpdate = true;
+  inst.geometry.setAttribute('aLeafRadius', attr);
+}
+
 function _foliagePhase(treeNodes, tips, maxTreeY) {
   // Bulletproof inputs — any missing piece means no leaves this frame.
   if (!Array.isArray(treeNodes) || treeNodes.length === 0) return;
@@ -7502,6 +6311,14 @@ function _foliagePhase(treeNodes, tips, maxTreeY) {
   if (hasJitterA) _fillLeafColorArray(leafInstA.instanceColor.array, leafDataA);
   leafInstA.instanceMatrix.needsUpdate = true;
   if (hasJitterA && leafInstA.instanceColor) leafInstA.instanceColor.needsUpdate = true;
+  // Per-instance attach radius — TSL leaf wind reads `aLeafRadius` and uses
+  // (1 - radius/maxRadius) as the per-leaf amplitude scale, so leaves on
+  // thick interior twigs barely vibrate while tip leaves whip. Attached to
+  // the shared leaf geometry; leafDataB is empty in this codebase so the
+  // shared-geo aliasing has no observable effect. If B is ever populated,
+  // give it its own geometry clone before attaching.
+  _attachLeafRadiusAttr(leafInstA, leafDataA);
+  if (leafInstB && leafDataB.length > 0) _attachLeafRadiusAttr(leafInstB, leafDataB);
 
   if (P.treeType === 'conifer' && P.cConeCount > 0 && tips.length > 0) {
     const count = Math.min(P.cConeCount, tips.length);
@@ -7642,6 +6459,7 @@ async function _tubesOnlyRebuild(myGen) {
   for (const r of chainResults) { totalVerts += r.vertCount; totalIdx += r.index ? r.index.length : 0; }
   _ensureBarkPools(totalVerts, totalIdx);
   const _bP = _barkPosPool, _bN = _barkNormPool, _bU = _barkUvPool, _bI = _barkIndexPool, _bR = barkRadialRest;
+  const _bRad = _barkRadiusPool;
   let _vOff = 0, _iOff = 0;
   // Track bark bounds inline — saves a full O(V) walk inside
   // BufferGeometry.computeBoundingBox() after the pool-fill.
@@ -7656,6 +6474,7 @@ async function _tubesOnlyRebuild(myGen) {
     barkNodeA.set(r.nodeA, _vOff);
     barkNodeB.set(r.nodeB, _vOff);
     barkNodeW.set(r.nodeW, _vOff);
+    if (r.radius) _bRad.set(r.radius, _vOff);
     if (r.index) {
       const idx = r.index;
       for (let k = 0; k < idx.length; k++) _bI[_iOff + k] = idx[k] + _vOff;
@@ -7680,6 +6499,7 @@ async function _tubesOnlyRebuild(myGen) {
   treeGeo.setAttribute('position', new THREE.BufferAttribute(_bP.subarray(0, totalVerts * 3), 3));
   treeGeo.setAttribute('normal',   new THREE.BufferAttribute(_bN.subarray(0, totalVerts * 3), 3));
   treeGeo.setAttribute('uv',       new THREE.BufferAttribute(_bU.subarray(0, totalVerts * 2), 2));
+  treeGeo.setAttribute('aRadius',  new THREE.BufferAttribute(_bRad.subarray(0, totalVerts), 1));
   treeGeo.setIndex(new THREE.BufferAttribute(_bI.subarray(0, totalIdx), 1));
   // Manual bounding-box + sphere from the inline scan. Skips the separate
   // O(V) computeBoundingBox / computeBoundingSphere walks three.js would do.
@@ -7780,6 +6600,10 @@ async function generateTree(opts = {}) {
   _gtMark('start');
   try {
   _sanitizeForBuild();
+  // Refresh _sunDir* cache for the TropismPanel preview arrow. The
+  // growth-engine computes its own sun direction inside buildTree, so this
+  // call is purely UI-side; cheap, runs once per regen.
+  _recomputeSunDir();
   const myGen = ++_buildGen;
   // Tubes-only fast path runs BEFORE the sculpt/orphan/clear logic because
   // nothing about the skeleton, leaves, or decoration meshes changes — we
@@ -7939,12 +6763,20 @@ async function generateTree(opts = {}) {
     }
   }
   // Sync fallback path — used when the worker is unavailable OR when it
-  // failed (tree-build-error flows back as a null result above).
+  // failed (tree-build-error flows back as a null result above). Now routes
+  // through the SAME growth-engine the worker uses, so the tree at any
+  // given seed is bit-identical between sync + worker paths.
   if (!treeNodes) {
-    treeNodes = [];
-    treeRoot = buildTree(treeNodes);
+    const _btState = {
+      P,
+      seed: P.seed,
+      attractors: Array.isArray(P.attractors) ? P.attractors : [],
+      lengthPoints: (lengthSpline && lengthSpline.points) ? lengthSpline.points.slice() : null,
+    };
+    const _btResult = _treeBuilder.buildTree(_btState);
+    treeRoot = _btResult.root;
+    treeNodes = _btResult.nodes;
     _gtMark('sync_buildTree');
-    for (let i = 0; i < treeNodes.length; i++) treeNodes[i].idx = i;
     chains = buildChains(treeRoot);
     _gtMark('sync_buildChains');
     _cachedChainsSer = null;
@@ -7964,6 +6796,7 @@ async function generateTree(opts = {}) {
   for (const r of chainResults) { totalVerts += r.vertCount; totalIdx += r.index ? r.index.length : 0; }
   _ensureBarkPools(totalVerts, totalIdx);
   const _bP = _barkPosPool, _bN = _barkNormPool, _bU = _barkUvPool, _bI = _barkIndexPool, _bR = barkRadialRest;
+  const _bRad = _barkRadiusPool;
   let _vOff = 0, _iOff = 0;
   // Track bounds inline — skips a second O(V) walk in computeBoundingBox.
   let _bMinX = Infinity, _bMinY = Infinity, _bMinZ = Infinity;
@@ -7977,6 +6810,7 @@ async function generateTree(opts = {}) {
     barkNodeA.set(r.nodeA, _vOff);
     barkNodeB.set(r.nodeB, _vOff);
     barkNodeW.set(r.nodeW, _vOff);
+    if (r.radius) _bRad.set(r.radius, _vOff);
     if (r.index) {
       const idx = r.index;
       for (let k = 0; k < idx.length; k++) _bI[_iOff + k] = idx[k] + _vOff;
@@ -7999,6 +6833,7 @@ async function generateTree(opts = {}) {
   treeGeo.setAttribute('position', new THREE.BufferAttribute(_bP.subarray(0, totalVerts * 3), 3));
   treeGeo.setAttribute('normal',   new THREE.BufferAttribute(_bN.subarray(0, totalVerts * 3), 3));
   treeGeo.setAttribute('uv',       new THREE.BufferAttribute(_bU.subarray(0, totalVerts * 2), 2));
+  treeGeo.setAttribute('aRadius',  new THREE.BufferAttribute(_bRad.subarray(0, totalVerts), 1));
   treeGeo.setIndex(new THREE.BufferAttribute(_bI.subarray(0, totalIdx), 1));
   _assignTreeBounds(treeGeo, _bMinX, _bMinY, _bMinZ, _bMaxX, _bMaxY, _bMaxZ);
   barkRestPos.set(_bP.subarray(0, totalVerts * 3), 0);
@@ -8011,6 +6846,11 @@ async function generateTree(opts = {}) {
   let _maxRootR = 0;
   for (const n of treeNodes) if ((n.radius || 0) > _maxRootR) _maxRootR = n.radius;
   if (_maxRootR < 1e-4) _maxRootR = 0.3;
+  // Push the trunk reference radius into the TSL wind shaders so the
+  // radius-based sway weight (1 - radius/maxRadius) reads as expected for
+  // both bark and leaves. _foliagePhase below also reads this for the
+  // per-instance leaf radius attribute.
+  uMaxRadius.value = _maxRootR;
   const N = treeNodes.length;
   // Skeleton[] object pool still exists for sculpt/grab/UI consumers that
   // read .pos/.restPos/.worldOffset through the old interface. Hot paths
@@ -9500,8 +8340,11 @@ function speciesInfo(k) {
 
   function setTriggerContent(k) {
     const info = speciesInfo(k);
+    const triggerThumb = (k === 'Custom')
+      ? iconSvg(speciesIconName(k), 22)
+      : `<img src="presets/${k.toLowerCase()}.png" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.style.display='none'"/>`;
     trigger.innerHTML = `
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,0.06);flex:0 0 34px;">${iconSvg(speciesIconName(k), 22)}</span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,0.06);flex:0 0 34px;overflow:hidden;">${triggerThumb}</span>
       <span style="display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.25;">
         <span style="font-size:14px;font-weight:600;letter-spacing:-0.01em;">${k}</span>
         <span style="font-size:11px;opacity:0.55;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${info.sub}</span>
@@ -9525,15 +8368,21 @@ function speciesInfo(k) {
     row.type = 'button';
     row.dataset.name = k;
     row.style.cssText = `display:flex;align-items:flex-start;gap:10px;width:100%;padding:9px 10px;background:${isActive ? 'rgba(120,170,255,0.12)' : 'transparent'};border:none;border-radius:8px;color:inherit;cursor:pointer;text-align:left;`;
+    // Use captured PNG thumbnail for known species; fall back to icon for Custom or missing files.
+    const thumbSize = 44;
+    const thumbStyle = `display:inline-flex;align-items:center;justify-content:center;width:${thumbSize}px;height:${thumbSize}px;border-radius:8px;background:rgba(255,255,255,0.06);flex:0 0 ${thumbSize}px;color:${isActive ? '#7aaaff' : 'inherit'};margin-top:2px;overflow:hidden;`;
+    const thumbInner = (k === 'Custom')
+      ? iconSvg(speciesIconName(k), 26)
+      : `<img src="presets/${k.toLowerCase()}.png" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.style.display='none'"/>`;
     row.innerHTML = `
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,0.06);flex:0 0 34px;color:${isActive ? '#7aaaff' : 'inherit'};margin-top:2px;">${iconSvg(speciesIconName(k), 22)}</span>
+      <span style="${thumbStyle}">${thumbInner}</span>
       <span style="display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.3;gap:2px;">
         <span style="font-size:13.5px;font-weight:${isActive ? '600' : '500'};letter-spacing:-0.01em;color:${isActive ? '#7aaaff' : 'inherit'};">${k}</span>
         <span style="font-size:11px;opacity:0.6;font-style:italic;">${info.sub}</span>
         ${habit ? `<span style="font-size:10.5px;opacity:0.4;">${habit}</span>` : ''}
         ${height ? `<span style="margin-top:3px;"><span style="display:inline-block;font-size:10px;font-weight:500;letter-spacing:0.02em;padding:2px 7px;border-radius:9px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.72);">${height}</span></span>` : ''}
       </span>
-      ${isActive ? `<span style="color:#7aaaff;flex:0 0 auto;margin-top:9px;">${iconSvg('check', 14)}</span>` : ''}
+      ${isActive ? `<span style="color:#7aaaff;flex:0 0 auto;margin-top:13px;">${iconSvg('check', 14)}</span>` : ''}
     `;
     row.addEventListener('mouseenter', () => { if (!isActive) row.style.background = 'rgba(255,255,255,0.05)'; });
     row.addEventListener('mouseleave', () => { if (!isActive) row.style.background = 'transparent'; });
@@ -10413,8 +9262,13 @@ buildParamGroup('Leaf Material');
       { noRegen: true },
     );
   };
-  wrap.appendChild(mkBend('Midrib cup', 'leafMidribCurl', -0.4, 0.6, 0.01));
-  wrap.appendChild(mkBend('Apex curl',  'leafApexCurl',   -0.4, 0.4, 0.01));
+  const _midrib = mkBend('Midrib cup', 'leafMidribCurl', -0.4, 0.6, 0.01);
+  const _apex   = mkBend('Apex curl',  'leafApexCurl',   -0.4, 0.4, 0.01);
+  _midrib.classList.add('lc-curl-row');
+  _apex.classList.add('lc-curl-row');
+  wrap.appendChild(_midrib);
+  wrap.appendChild(_apex);
+  _updateLeafCurlUiVisibility();
 
   const hint = document.createElement('div');
   hint.className = 'hint-sm-mt';
@@ -11413,8 +10267,10 @@ function _buildLeafCreatorPanel() {
   // ---- Bend section ----
   const bendBody = mkSection('Bend',
     '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 C 8 10, 16 10, 20 18"/><path d="M12 4v4"/></svg>');
+  bendBody.parentElement.classList.add('lc-curl-section');
   mkSlider(bendBody, 'leafMidribCurl', 'Midrib cup', -0.4, 0.6, 0.01);
   mkSlider(bendBody, 'leafApexCurl',   'Apex curl',  -0.4, 0.4, 0.01);
+  _updateLeafCurlUiVisibility();
 
   // ---- Colors section ----
   const colorsBody = mkSection('Colors',
@@ -14175,6 +13031,30 @@ function _buildHelpModal() {
 function openHelpModal() { _buildHelpModal()._open(); }
 document.getElementById('help-btn')?.addEventListener('click', openHelpModal);
 
+// --- Mobile sidebar toggle ---------------------------------------------
+// CSS handles all visibility and transitions via the `mobile-sidebar-open`
+// body class and a (max-width: 768px) media query. We only flip the class
+// and aria state here; on desktop the button is `display:none` so these
+// listeners never fire from a real user gesture.
+{
+  const btn = document.getElementById('mobile-menu-btn');
+  const backdrop = document.getElementById('mobile-sidebar-backdrop');
+  const setOpen = (open) => {
+    document.body.classList.toggle('mobile-sidebar-open', open);
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (backdrop) backdrop.hidden = !open;
+  };
+  btn?.addEventListener('click', () => {
+    setOpen(!document.body.classList.contains('mobile-sidebar-open'));
+  });
+  backdrop?.addEventListener('click', () => setOpen(false));
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('mobile-sidebar-open')) {
+      setOpen(false);
+    }
+  });
+}
+
 // Render two perpendicular orthographic views of the current tree into a
 // 2×1 atlas, then return a crossed-quad mesh that samples the atlas. This is
 // the cheapest foliage LOD game engines accept (~8 tris total) and is what
@@ -14522,6 +13402,9 @@ tbUploadInput.addEventListener('change', (e) => {
       }
       P.leafShape = 'Upload';
       _refreshLeafShapePanel?.();
+      // Re-fit the flat-leaf quad to the freshly uploaded image's alpha bbox.
+      rebuildLeafGeo();
+      if (typeof markRenderDirty === 'function') markRenderDirty(2);
     };
     img.src = ev.target.result;
   };
@@ -14873,6 +13756,12 @@ const stats = {
   gpuMsMax: 0,
   gpuSamples: [],  // ring buffer of recent ms values
   gpuIdx: 0,
+  // Last non-zero render counts. renderer.info.render is per-render, so when
+  // the motion-gated loop skips postProcessing.render() these read as 0 and
+  // the readout flashes empty between dirty frames.
+  lastTris: 0,
+  lastLines: 0,
+  lastCalls: 0,
 };
 const GPU_SAMPLE_CAP = 30;
 // Force a render every frame, even when the scene is idle — used to measure
@@ -14888,16 +13777,26 @@ function updateStats(dt) {
   stats.accumDt = 0;
 
   const info = renderer.info;
-  const tris = info.render.triangles || 0;
-  const lines = info.render.lines || 0;
-  const calls = info.render.calls || 0;
+  const _tris = info.render.triangles || 0;
+  const _lines = info.render.lines || 0;
+  const _calls = info.render.calls || 0;
+  if (_tris)  stats.lastTris  = _tris;
+  if (_lines) stats.lastLines = _lines;
+  if (_calls) stats.lastCalls = _calls;
+  const tris = stats.lastTris;
+  const lines = stats.lastLines;
+  const calls = stats.lastCalls;
   const geos = info.memory.geometries || 0;
   const tex = info.memory.textures || 0;
   const nodeCount = treeMesh ? (treeMesh.geometry.attributes.position.count) : 0;
   const leafCount = (leafInstA?.count || 0) + (leafInstB?.count || 0);
   const fallen = landedLeaves.length;
 
-  const fmt = (n) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n);
+  const fmt = (n) => {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 2) + 'M';
+    if (n >= 1000)      return (n / 1000).toFixed(n >= 10_000 ? 0 : 1) + 'k';
+    return String(n);
+  };
   // GPU ms — average of the sample buffer, theoretical max fps from that.
   let gpuMsAvg = 0;
   if (stats.gpuSamples.length) {
