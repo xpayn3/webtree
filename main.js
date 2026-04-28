@@ -36,6 +36,7 @@ import {
 } from './growth-engine.js?v=r18';
 import { makeConsoleAPI as _parityMakeConsoleAPI } from './parity-harness.js?v=r18';
 import { generateBarkTexture, generateBarkThumbnail, generateNoiseThumbnail, BARK_STYLES } from './bark-textures.js?v=r18';
+import { extrudeChainGPU, extrudeChainGPUSafe } from './gpu-tube.js?v=r18';
 // One TreeBuilder per app — captures THREE so the engine's internal Vector3s
 // resolve to this page's three.js (the worker creates its own builder against
 // its own CDN-loaded three.js). buildTree below is the same function the
@@ -15227,3 +15228,69 @@ window.__parity = _parityMakeConsoleAPI(
     regen() { return generateTree(); },
   },
 );
+
+// Console diagnostic for the experimental GPU compute extrude path
+// (gpu-tube.js). Runs the GPU kernel on the FIRST chain of the current
+// tree, runs the CPU buildTube on the same chain, and reports max abs diff
+// in vertex positions. Use this to verify the TSL compute API + storage
+// buffer round-trip work in your browser before wiring the GPU path into
+// the regen pipeline.
+//
+//   await __gpuTubeTest()                     // tests _chainsRef[0]
+//   await __gpuTubeTest(chainIndex)           // pick a different chain
+//
+// If you see "GPU FAILED — <reason>", the kernel didn't compile / dispatch
+// — check the console for the actual TSL error. The CPU path keeps working
+// regardless; this diagnostic NEVER mutates the live geometry.
+window.__gpuTubeTest = async function (chainIndex = 0) {
+  if (!_chainsRef || !_chainsRef.length) {
+    console.warn('[gpuTubeTest] no chains — generate a tree first');
+    return null;
+  }
+  const chain = _chainsRef[chainIndex];
+  if (!chain || chain.length < 2) {
+    console.warn('[gpuTubeTest] chain too short:', chain && chain.length);
+    return null;
+  }
+  // Convert to POJO form, same as tubeFromChain wrapper.
+  const chainPOJOs = chain.map((n) => ({
+    x: n.pos.x, y: n.pos.y, z: n.pos.z, radius: n.radius, idx: n.idx,
+  }));
+  const isBranch = !!chain[0].chainRoot;
+  const parentRadius = isBranch && chain[0].parent ? (chain[0].parent.radius || 0) : 0;
+  const opts = {
+    profile: profileEditor, taper: taperSpline, isScrubbing: false,
+    isBranch, parentRadius, barkTexScaleV: P.barkTexScaleV,
+    displace: {
+      radialSegs: P.barkRadialSegs ?? 16, tubularDensity: P.barkTubularDensity ?? 6,
+    },
+  };
+  console.log(`[gpuTubeTest] chain=${chainIndex} length=${chain.length} isBranch=${isBranch}`);
+  let gpu = null;
+  try {
+    gpu = await extrudeChainGPU(renderer, chainPOJOs, opts);
+  } catch (e) {
+    console.error('[gpuTubeTest] GPU FAILED —', e.message, e);
+    return { ok: false, error: e.message };
+  }
+  if (!gpu) { console.warn('[gpuTubeTest] GPU returned null'); return { ok: false, error: 'null' }; }
+  // Run the CPU path on the same chain for direct comparison.
+  const cpu = await import('./growth-engine.js?v=r18').then((m) => m.buildTube(
+    chainPOJOs, opts.profile, opts.taper, false, opts.displace, isBranch, parentRadius, P.barkTexScaleV,
+  ));
+  if (!cpu) { console.warn('[gpuTubeTest] CPU returned null'); return { ok: false, error: 'cpu-null' }; }
+  if (cpu.vertCount !== gpu.vertCount) {
+    console.error(`[gpuTubeTest] vertCount mismatch — cpu=${cpu.vertCount} gpu=${gpu.vertCount}`);
+    return { ok: false, cpu, gpu };
+  }
+  let maxDiff = 0, sumDiff = 0;
+  for (let i = 0; i < cpu.position.length; i++) {
+    const d = Math.abs(cpu.position[i] - gpu.position[i]);
+    if (d > maxDiff) maxDiff = d;
+    sumDiff += d;
+  }
+  const avgDiff = sumDiff / cpu.position.length;
+  console.log(`[gpuTubeTest] verts=${cpu.vertCount}  max|Δpos|=${maxDiff.toExponential(3)}  avg|Δpos|=${avgDiff.toExponential(3)}`);
+  console.log('[gpuTubeTest] tip: avg <1e-4 means the TSL kernel produces matching output. Larger gaps point at displacement / buttress / react-wood code that the spike kernel doesn\'t implement yet.');
+  return { ok: true, maxDiff, avgDiff, cpu, gpu };
+};
